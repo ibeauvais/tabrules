@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "TabRules",
+  "description": "Automatically group tabs with your own rules. No network access, no data collection.",
+  "minimum_chrome_version": "120",
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "permissions": ["tabs", "tabGroups", "storage"],
+  "content_security_policy": {
+    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; require-trusted-types-for 'script'"
+  },
+  "externally_connectable": {
+    "ids": []
+  }
+}
