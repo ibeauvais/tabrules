@@ -105,9 +105,9 @@ manifest.json
 - **Compiled rules.** Exact hostname rules go in a `Map<hostname, Rule>`, which makes lookup O(1). The catch-all is the fallback. Rules are recompiled only on `storage.onChanged`.
 - **Fewer Chrome API calls.**
   - Skip the call when the tab is already in its target group.
-  - Cache `(windowId, groupKey) → groupId` in memory. Invalidate it on `tabGroups.onRemoved` and `onUpdated`, and fall back to `tabGroups.query` on a cache miss.
-- **Batching.** "Group all now" buckets tabs by key and makes one `chrome.tabs.group({ tabIds: [...] })` call per group.
-- **Serialization.** A per-window promise queue prevents duplicate groups when several tabs open at once.
+  - Keep `(windowId, groupKey) → groupId` in memory, mirrored to `storage.session`. Clean it up on `tabGroups.onRemoved`, and fall back to `tabGroups.query` by title on a miss.
+- **Batching.** "Group all" buckets tabs by `(windowId, groupKey)` and makes one `chrome.tabs.group({ tabIds: [...] })` call per group.
+- **Serialization.** A single promise queue prevents duplicate groups when several tabs open at once. Operations take a few milliseconds, so one queue is simpler than one per window and costs nothing measurable. Each queued operation re-reads the tab, so it never acts on a stale event snapshot.
 - **Budgets.**
   - Event handling under 1 ms of our own code, Chrome API time excluded.
   - "Group all" on 300 tabs in under 500 ms.
@@ -116,15 +116,18 @@ manifest.json
 
 ## 6. Grouping behaviour and edge cases
 
-| Case                                              | Behaviour                                                                     |
-| ------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Tab navigates to a hostname with a matching rule  | Move it to the group for `(windowId, groupKey)`, creating the group if needed |
-| Tab navigates to a hostname with no matching rule | Ungroup it only if it sits in a group TabRules manages                        |
-| Groups created or edited by hand                  | Never touched. Only groups listed in the session map are managed              |
-| User renames a managed group                      | Treat it as user-owned from then on and drop it from the session map          |
-| Tab or group closed during an operation           | Swallow only the "No tab/group with id" error. Report any other error         |
-| Service worker restart                            | Stateless. Rebuild the session map from `storage.session`                     |
-| Tab moved to another window                       | Re-evaluate it in its new window (`tabs.onAttached`)                          |
+| Case                                              | Behaviour                                                                                                                  |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Tab navigates to a hostname with a matching rule  | Move it to the group for `(windowId, groupKey)`, creating the group if needed                                              |
+| Tab navigates to a hostname with no matching rule | Ungroup it only if it sits in a group TabRules manages                                                                     |
+| Groups created by hand                            | Never touched, and their tabs are left in them. Only groups in the managed map are managed                                 |
+| A group already has the target title              | Adopted as managed. This recovers groups after a browser restart, since group IDs change. Unnamed groups are never adopted |
+| User renames a managed group                      | It stays managed: matching tabs keep joining it. Detecting renames reliably is not possible with the tab groups API        |
+| Rules changed                                     | Re-applied to all open tabs automatically                                                                                  |
+| Tab or group closed during an operation           | Swallow only the "No tab/group with id" error. Report any other error                                                      |
+| Managed group removed but still in the map        | `tabs.group` fails with "No group with id", so drop the entry and create a new group                                       |
+| Service worker restart                            | Stateless. The managed map is reloaded from `storage.session`                                                              |
+| Tab moved to another window                       | Re-evaluate it in its new window (`tabs.onAttached`)                                                                       |
 
 ## 7. Milestones
 
