@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>TabRules</title>
+    <link rel="stylesheet" href="../common.css" />
+    <link rel="stylesheet" href="popup.css" />
+    <script type="module" src="popup.js"></script>
+  </head>
+  <body>
+    <main class="popup">
+      <h1>TabRules</h1>
+      <label class="switch-row">
+        <span>Automatic grouping</span>
+        <input id="enabled" type="checkbox" role="switch" />
+      </label>
+      <p id="summary" class="muted"></p>
+      <p id="popup-error" class="error" role="alert" hidden></p>
+      <button id="open-options" type="button">Manage rules</button>
+    </main>
+  </body>
+</html>

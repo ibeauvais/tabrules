@@ -1,11 +1,7 @@
 import { compileRules, type CompiledRules } from "../core/registry.js";
 import { parseRules } from "../core/validation.js";
+import { createCachedValue, type CachedValue } from "./cached-value.js";
 import { log } from "./log.js";
-
-export interface RulesCache {
-  get(): Promise<CompiledRules>;
-  invalidate(): void;
-}
 
 const compileStoredRules = (storedRules: unknown): CompiledRules => {
   if (storedRules === undefined) {
@@ -21,21 +17,10 @@ const compileStoredRules = (storedRules: unknown): CompiledRules => {
 
 export const createRulesCache = (
   loadRules: () => Promise<unknown>,
-): RulesCache => {
-  let compiledRules: Promise<CompiledRules> | undefined;
+): CachedValue<CompiledRules> =>
+  createCachedValue(() => loadRules().then(compileStoredRules));
 
-  return {
-    get() {
-      compiledRules ??= loadRules()
-        .then(compileStoredRules)
-        .catch((error: unknown) => {
-          compiledRules = undefined;
-          throw error;
-        });
-      return compiledRules;
-    },
-    invalidate() {
-      compiledRules = undefined;
-    },
-  };
-};
+export const createEnabledFlag = (
+  loadEnabled: () => Promise<unknown>,
+): CachedValue<boolean> =>
+  createCachedValue(() => loadEnabled().then((stored) => stored !== false));

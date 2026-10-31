@@ -1,0 +1,18 @@
+.popup {
+  width: 280px;
+  padding: 16px;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.popup button {
+  width: 100%;
+  justify-content: center;
+}

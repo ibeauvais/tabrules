@@ -31,7 +31,7 @@ const HOSTNAME_RULE_KEYS = new Set([
 
 type UnknownRecord = Record<string, unknown>;
 
-const isPlainObject = (value: unknown): value is UnknownRecord => {
+export const isPlainObject = (value: unknown): value is UnknownRecord => {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -43,6 +43,9 @@ export const isValidHostnamePattern = (pattern: string): boolean =>
   pattern === CATCH_ALL_PATTERN ||
   (pattern.length <= LIMITS.maxPatternLength &&
     (DNS_HOSTNAME_FORMAT.test(pattern) || IPV6_LITERAL_FORMAT.test(pattern)));
+
+export const isValidGroupTitle = (title: string): boolean =>
+  title.length <= LIMITS.maxGroupTitleLength && !CONTROL_CHARACTERS.test(title);
 
 const parseHostnameRule = (
   record: UnknownRecord,
@@ -78,8 +81,7 @@ const parseHostnameRule = (
       );
     } else if (
       typeof groupTitle !== "string" ||
-      groupTitle.length > LIMITS.maxGroupTitleLength ||
-      CONTROL_CHARACTERS.test(groupTitle)
+      !isValidGroupTitle(groupTitle)
     ) {
       errors.push(
         `${path}.groupTitle: must be a string of at most ${String(LIMITS.maxGroupTitleLength)} characters without control characters`,

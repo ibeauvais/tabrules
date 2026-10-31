@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createRulesCache } from "./rules-cache.js";
+import { createEnabledFlag, createRulesCache } from "./rules-cache.js";
 
 const catchAllRule = {
   id: "all",
@@ -69,5 +69,18 @@ describe("createRulesCache", () => {
 
     await expect(cache.get()).rejects.toThrow("storage unavailable");
     expect((await cache.get()).match("https://github.com/")).not.toBeNull();
+  });
+});
+
+describe("createEnabledFlag", () => {
+  it.each([
+    [undefined, true],
+    [true, true],
+    [false, false],
+    ["false", true],
+  ])("reads stored value %j as %j", async (stored, expected) => {
+    const flag = createEnabledFlag(() => Promise.resolve(stored));
+
+    expect(await flag.get()).toBe(expected);
   });
 });

@@ -47,7 +47,7 @@ src/
     grouper.ts                   # find-or-create group, move tab, per-window queue
     rules-cache.ts               # lazy-loaded compiled rules, invalidated on storage change
   ui/options/                    # rules CRUD (vanilla TS + DOM APIs, no framework)
-  ui/popup/                      # "Group all now", global on/off
+  ui/popup/                      # global on/off, rules summary, link to options
 manifest.json
 ```
 
@@ -60,7 +60,7 @@ manifest.json
 - **Network.** The CSP below sets `connect-src 'none'`, so even a compromised build cannot call out.
 - **Rules storage.** Rules live in `chrome.storage.local`, not `sync`. They never leave the machine, not even to Google Sync. Users can move them by hand with JSON export and import.
 - **Runtime state.** The `groupId → groupKey` map lives in `chrome.storage.session`. That storage is memory-only, wiped when the browser restarts, and never written to disk.
-- **Logging.** Logs contain only event types and error codes, never URLs, hostnames or titles. Console logging is off by default and can be turned on with a debug flag in the options.
+- **Logging.** Logs contain only event types and error messages, never URLs, hostnames or titles. Only warnings and errors are logged, so no debug flag is needed.
 - **Incognito.** Not enabled by default (Chrome's default). Nothing in the manifest requests it.
 - **`PRIVACY.md`** in the repo, used as the store's privacy policy: "collects nothing, sends nothing".
 
@@ -136,7 +136,7 @@ manifest.json
    - 100% branch coverage.
    - Edge cases: IP addresses, IPv6, `localhost`, ports, punycode or IDN hostnames, invalid URLs.
 3. **Engine.** Service worker, rules cache, grouper with its queue, session map.
-4. **UI.** Options page (rules CRUD, JSON import and export, debug toggle) and popup ("Group all now", on/off).
+4. **UI.** Options page (rules CRUD, JSON import and export) and popup (on/off, rules summary). There is no "Group all now" button: changing the rules or switching grouping back on already re-applies the rules to every open tab, and there is no message passing between pages and the service worker, which keeps the attack surface smaller.
 5. **Hardening.**
    - Run the manual test matrix from section 6.
    - Performance benchmark.

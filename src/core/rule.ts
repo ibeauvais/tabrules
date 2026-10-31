@@ -12,6 +12,10 @@ const TAB_GROUP_COLORS: Record<TabGroupColor, true> = {
   yellow: true,
 };
 
+export const TAB_GROUP_COLOR_NAMES = Object.keys(
+  TAB_GROUP_COLORS,
+) as readonly TabGroupColor[];
+
 export const isTabGroupColor = (value: unknown): value is TabGroupColor =>
   typeof value === "string" && Object.hasOwn(TAB_GROUP_COLORS, value);
 

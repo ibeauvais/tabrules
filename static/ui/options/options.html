@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TabRules settings</title>
+    <link rel="stylesheet" href="../common.css" />
+    <link rel="stylesheet" href="options.css" />
+    <script type="module" src="options.js"></script>
+  </head>
+  <body>
+    <main class="options">
+      <header>
+        <h1>TabRules</h1>
+        <p class="muted">
+          Group tabs automatically with your own rules. Rules stay on this
+          device and nothing is sent anywhere.
+        </p>
+      </header>
+
+      <section class="card" aria-labelledby="form-title">
+        <h2 id="form-title">Add a rule</h2>
+        <form id="rule-form" novalidate>
+          <div class="fields">
+            <label>
+              <span>Hostname</span>
+              <input
+                id="pattern"
+                required
+                autocomplete="off"
+                spellcheck="false"
+                maxlength="2048"
+                placeholder="github.com, or * for every site"
+              />
+            </label>
+            <label>
+              <span>Group title</span>
+              <input
+                id="group-title"
+                autocomplete="off"
+                maxlength="100"
+                placeholder="Defaults to the hostname"
+              />
+            </label>
+            <label>
+              <span>Color</span>
+              <select id="color">
+                <option value="">Automatic</option>
+              </select>
+            </label>
+          </div>
+          <p id="form-error" class="error" role="alert" hidden></p>
+          <div class="actions">
+            <button id="submit" type="submit">Add rule</button>
+            <button id="cancel-edit" type="button" class="secondary" hidden>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card" aria-labelledby="rules-title">
+        <div class="section-header">
+          <h2 id="rules-title">Rules</h2>
+          <div class="actions">
+            <button id="export" type="button" class="secondary">Export</button>
+            <label class="button secondary">
+              Import
+              <input
+                id="import"
+                type="file"
+                accept="application/json,.json"
+                class="visually-hidden"
+              />
+            </label>
+          </div>
+        </div>
+        <p id="storage-error" class="error" role="alert" hidden></p>
+        <p id="list-error" class="error" role="alert" hidden></p>
+        <div id="empty-state" class="empty-state" hidden>
+          <p>No rules yet.</p>
+          <button id="add-catch-all" type="button">
+            Group every site by hostname
+          </button>
+        </div>
+        <table id="rules-table">
+          <thead>
+            <tr>
+              <th scope="col">On</th>
+              <th scope="col">Hostname</th>
+              <th scope="col">Group title</th>
+              <th scope="col">Color</th>
+              <th scope="col"><span class="visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody id="rules-body"></tbody>
+        </table>
+        <p class="muted hint">
+          A hostname rule matches that exact hostname only: github.com does not
+          match gist.github.com. Exact rules take precedence over
+          <code>*</code>. Groups you create yourself are never changed.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>
