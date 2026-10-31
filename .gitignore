@@ -3,4 +3,5 @@ dist/
 coverage/
 *.zip
 .DS_Store
+.idea/
 !.tool-versions
