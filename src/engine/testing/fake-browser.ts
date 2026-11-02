@@ -14,6 +14,7 @@ export class FakeBrowser implements BrowserTabs {
   readonly tabs = new Map<number, TabInfo>();
   readonly groups = new Map<number, FakeGroup>();
   readonly calls: string[] = [];
+  readonly reads: string[] = [];
   failNextCall: Error | undefined;
   private nextGroupId = 100;
 
@@ -38,11 +39,13 @@ export class FakeBrowser implements BrowserTabs {
   }
 
   getTab(tabId: number): Promise<TabInfo | null> {
+    this.reads.push(`getTab ${String(tabId)}`);
     const tab = this.tabs.get(tabId);
     return Promise.resolve(tab ? { ...tab } : null);
   }
 
   listTabs(): Promise<TabInfo[]> {
+    this.reads.push("listTabs");
     return Promise.resolve([...this.tabs.values()].map((tab) => ({ ...tab })));
   }
 

@@ -37,12 +37,9 @@ export const createGrouper = ({
   getRules,
 }: GrouperDependencies): Grouper => {
   let queue: Promise<void> = Promise.resolve();
-  const enqueue = (task: () => Promise<void>): Promise<void> => {
-    queue = queue.then(task).catch((error: unknown) => {
-      log("error", "grouping_failed", { error: errorMessage(error) });
-    });
-    return queue;
-  };
+  let pendingTabIds = new Set<number>();
+  let isAllTabsPending = false;
+  let isFlushScheduled = false;
 
   const planGrouping = async (
     candidates: readonly TabInfo[],
@@ -141,22 +138,58 @@ export const createGrouper = ({
     if (tabIdsToUngroup.length > 0) {
       await ignoringClosedTabs(() => tabs.ungroup(tabIdsToUngroup));
     }
-    for (const bucket of buckets) {
-      await ignoringClosedTabs(() => moveBucket(bucket));
+    const bucketsSharingTitle = Map.groupBy(
+      buckets,
+      (bucket) => `${String(bucket.windowId)}|${bucket.target.title}`,
+    );
+    const results = await Promise.allSettled(
+      [...bucketsSharingTitle.values()].map(async (sameTitleBuckets) => {
+        for (const bucket of sameTitleBuckets) {
+          await ignoringClosedTabs(() => moveBucket(bucket));
+        }
+      }),
+    );
+    const failures = results
+      .filter((result) => result.status === "rejected")
+      .map((result) => result.reason as unknown);
+    if (failures.length > 0) {
+      throw new AggregateError(failures, failures.map(errorMessage).join("; "));
     }
   };
 
+  const flush = async (): Promise<void> => {
+    const tabIds = [...pendingTabIds];
+    const includesAllTabs = isAllTabsPending;
+    pendingTabIds = new Set();
+    isAllTabsPending = false;
+    isFlushScheduled = false;
+
+    const candidates = includesAllTabs
+      ? await tabs.listTabs()
+      : (await Promise.all(tabIds.map((tabId) => tabs.getTab(tabId)))).filter(
+          (tab) => tab !== null,
+        );
+    await applyToTabs(candidates);
+  };
+
+  const scheduleFlush = (): Promise<void> => {
+    if (!isFlushScheduled) {
+      isFlushScheduled = true;
+      queue = queue.then(flush).catch((error: unknown) => {
+        log("error", "grouping_failed", { error: errorMessage(error) });
+      });
+    }
+    return queue;
+  };
+
   return {
-    applyToTab: (tabId) =>
-      enqueue(async () => {
-        const tab = await tabs.getTab(tabId);
-        if (tab) {
-          await applyToTabs([tab]);
-        }
-      }),
-    applyToAllTabs: () =>
-      enqueue(async () => {
-        await applyToTabs(await tabs.listTabs());
-      }),
+    applyToTab: (tabId) => {
+      pendingTabIds.add(tabId);
+      return scheduleFlush();
+    },
+    applyToAllTabs: () => {
+      isAllTabsPending = true;
+      return scheduleFlush();
+    },
   };
 };

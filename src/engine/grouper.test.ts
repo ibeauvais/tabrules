@@ -225,6 +225,76 @@ describe("createGrouper", () => {
     expect(browser.groups.size).toBe(1);
   });
 
+  it("coalesces pending events into one batch", async () => {
+    browser
+      .addTab({ id: 1, url: "https://github.com/a" })
+      .addTab({ id: 2, url: "https://github.com/b" });
+
+    await Promise.all([
+      grouper.applyToTab(1),
+      grouper.applyToTab(2),
+      grouper.applyToTab(1),
+    ]);
+
+    expect(browser.reads).toEqual(["getTab 1", "getTab 2"]);
+    expect(browser.calls).toEqual(["createGroup 1,2", "updateGroup 100"]);
+  });
+
+  it("lets a pending full pass absorb pending tab events", async () => {
+    browser.addTab({ id: 1, url: "https://github.com/" });
+
+    await Promise.all([grouper.applyToTab(1), grouper.applyToAllTabs()]);
+
+    expect(browser.reads).toEqual(["listTabs"]);
+  });
+
+  it("processes events received during a pass in a following pass", async () => {
+    browser
+      .addTab({ id: 1, url: "https://github.com/" })
+      .addTab({ id: 2, url: "https://gitlab.com/" });
+
+    const firstPass = grouper.applyToTab(1);
+    await Promise.resolve();
+    const secondPass = grouper.applyToTab(2);
+    await Promise.all([firstPass, secondPass]);
+
+    expect(browser.reads).toEqual(["getTab 1", "getTab 2"]);
+    expect(browser.groups.size).toBe(2);
+  });
+
+  it("puts rules sharing a title in the same group", async () => {
+    rules = compileRules([
+      rule({ id: "gh", pattern: "github.com", groupTitle: "Code" }),
+      rule({ id: "gl", pattern: "gitlab.com", groupTitle: "Code" }),
+    ]);
+    browser
+      .addTab({ id: 1, url: "https://github.com/" })
+      .addTab({ id: 2, url: "https://gitlab.com/" });
+
+    await grouper.applyToAllTabs();
+
+    expect(browser.groups.size).toBe(1);
+    expect(browser.tabs.get(2)?.groupId).toBe(browser.tabs.get(1)?.groupId);
+  });
+
+  it("keeps grouping other buckets when one fails, then reports every failure", async () => {
+    browser
+      .addTab({ id: 1, url: "https://github.com/" })
+      .addTab({ id: 2, url: "https://gitlab.com/" });
+    browser.failNextCall = new Error("boom");
+
+    await grouper.applyToAllTabs();
+
+    expect(browser.groupOf(2)?.title).toBe("gitlab.com");
+    expect(console.error).toHaveBeenCalledWith(
+      JSON.stringify({
+        level: "error",
+        event: "grouping_failed",
+        error: "boom",
+      }),
+    );
+  });
+
   it("logs unexpected errors and keeps processing later events", async () => {
     browser
       .addTab({ id: 1, url: "https://github.com/" })
