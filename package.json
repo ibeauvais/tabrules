@@ -10,23 +10,30 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "typecheck": "tsc --noEmit",
+    "icons": "node scripts/render-icons.mjs",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "npm run build && vitest run --config vitest.e2e.config.ts",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test:coverage && npm run build"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/chrome": "0.3.6",
+    "@types/node": "26.6.5",
     "@vitest/coverage-v8": "5.0.5",
     "eslint": "10.13.0",
     "globals": "17.13.0",
     "prettier": "3.9.10",
+    "puppeteer": "25.16.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.0",
     "vitest": "5.0.5"
+  },
+  "overrides": {
+    "minimatch": "11.0.3"
   }
 }

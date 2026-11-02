@@ -107,12 +107,11 @@ manifest.json
   - Skip the call when the tab is already in its target group.
   - Keep `(windowId, groupKey) → groupId` in memory, mirrored to `storage.session`. Clean it up on `tabGroups.onRemoved`, and fall back to `tabGroups.query` by title on a miss.
 - **Batching.** "Group all" buckets tabs by `(windowId, groupKey)` and makes one `chrome.tabs.group({ tabIds: [...] })` call per group.
-- **Serialization.** A single promise queue prevents duplicate groups when several tabs open at once. Operations take a few milliseconds, so one queue is simpler than one per window and costs nothing measurable. Each queued operation re-reads the tab, so it never acts on a stale event snapshot.
-- **Budgets.**
-  - Event handling under 1 ms of our own code, Chrome API time excluded.
-  - "Group all" on 300 tabs in under 500 ms.
+- **Serialization and coalescing.** A single promise queue prevents duplicate groups when several tabs open at once. Events arriving while a pass is pending are coalesced into that pass: tab IDs are deduplicated and read in parallel, and a pending full pass absorbs individual tab events. Each pass re-reads the tabs, so it never acts on a stale event snapshot. Without coalescing, restoring 300 tabs queued 300 serial passes and grouping took about 4.9 s.
+- **Parallel groups.** Within a pass, groups are created in parallel. Chrome takes about 100 ms per `tabs.group` call in headless mode, so ten groups take about 1.3 s sequentially and 0.4 s in parallel. Buckets sharing a title in the same window stay sequential, so title adoption never creates duplicate groups.
+- **Budgets** (measured on an Apple Silicon laptop, headless Chrome for Testing).
+  - "Group all" on 300 loaded tabs across 10 hostnames: 370-700 ms measured, of which about 400 ms is Chrome's own API time. The e2e test fails above 2 s. That leaves headroom for shared CI runners while still catching a regression like the 4.9 s seen without coalescing.
   - Unpacked size under 50 KB.
-  - Measured with a scripted benchmark that opens 300 tabs.
 
 ## 6. Grouping behaviour and edge cases
 
@@ -137,10 +136,11 @@ manifest.json
    - Edge cases: IP addresses, IPv6, `localhost`, ports, punycode or IDN hostnames, invalid URLs.
 3. **Engine.** Service worker, rules cache, grouper with its queue, session map.
 4. **UI.** Options page (rules CRUD, JSON import and export) and popup (on/off, rules summary). There is no "Group all now" button: changing the rules or switching grouping back on already re-applies the rules to every open tab, and there is no message passing between pages and the service worker, which keeps the attack surface smaller.
-5. **Hardening.**
-   - Run the manual test matrix from section 6.
-   - Performance benchmark.
-   - Check that the CSP blocks `fetch`: a test in the options page console must fail.
+5. **Hardening.** Puppeteer end-to-end tests in headless Chrome for Testing, fully offline: a local HTTP server, with `*.test` hostnames mapped to it.
+   - Grouping behaviour from section 6, the options page and the popup.
+   - Security: the permissions, the CSP, `fetch` blocked in the service worker and pages, `innerHTML` blocked by Trusted Types, and no API exposed to web pages. `eval` cannot be tested this way, because DevTools evaluation bypasses the CSP; MV3 rejects `unsafe-eval` anyway.
+   - The 300-tab performance benchmark.
+   - The icons, rendered from `assets/*.svg` with `npm run icons`.
 6. **Dogfooding.** One week of daily use.
 7. **Publishing.**
    - GitHub: MIT license, README, `PRIVACY.md`, `SECURITY.md`, `CHANGELOG`, tagged release with checksum and provenance.

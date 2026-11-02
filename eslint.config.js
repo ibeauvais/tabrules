@@ -15,7 +15,7 @@ export default defineConfig(
   {
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        project: ["./tsconfig.json", "./tsconfig.e2e.json"],
         tsconfigRootDir: import.meta.dirname,
       },
     },
