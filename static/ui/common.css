@@ -49,6 +49,12 @@ h1 {
   font-size: 20px;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 h2 {
   font-size: 16px;
 }
