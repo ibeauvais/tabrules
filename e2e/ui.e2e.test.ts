@@ -36,6 +36,58 @@ describe("options page and popup", () => {
     await page.close();
   });
 
+  it("adds a regex rule from the form", async () => {
+    const page = await harness.browser.newPage();
+    await page.goto(harness.extensionUrl("ui/options/options.html"));
+    await harness.openTab(harness.urlFor("one.alpha.test"));
+    await harness.openTab(harness.urlFor("two.alpha.test"));
+
+    await page.select("#match-type", "regex");
+    expect(
+      await page.$eval("#regex-help", (element) =>
+        element.hasAttribute("hidden"),
+      ),
+    ).toBe(false);
+    await page.type("#pattern", "\\.alpha\\.test$");
+    await page.type("#group-title", "Alpha");
+    await page.click("#submit");
+
+    const groups = await harness.waitForGroups(
+      (current) => current[0]?.hostnames.length === 2,
+    );
+    expect(
+      groups.map(({ title, hostnames }) => ({ title, hostnames })),
+    ).toEqual([
+      { title: "Alpha", hostnames: ["one.alpha.test", "two.alpha.test"] },
+    ]);
+    expect(await harness.readStorage("rules")).toEqual([
+      {
+        id: expect.any(String) as string,
+        type: "regex",
+        pattern: "\\.alpha\\.test$",
+        groupTitle: "Alpha",
+        enabled: true,
+      },
+    ]);
+    await page.close();
+  });
+
+  it("shows an error for an invalid regex", async () => {
+    const page = await harness.browser.newPage();
+    await page.goto(harness.extensionUrl("ui/options/options.html"));
+
+    await page.select("#match-type", "regex");
+    await page.type("#pattern", "(?=alpha)");
+    await page.click("#submit");
+
+    expect(
+      await page.$eval("#form-error", (element) => element.textContent),
+    ).toBe(
+      "Invalid regular expression: lookarounds and named groups are not supported at position 2.",
+    );
+    await page.close();
+  });
+
   it("shows an error for an invalid hostname and saves nothing", async () => {
     const page = await harness.browser.newPage();
     await page.goto(harness.extensionUrl("ui/options/options.html"));

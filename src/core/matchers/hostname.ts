@@ -1,44 +1,36 @@
-import type { GroupTarget, RuleMatcher } from "../matcher.js";
+import { groupTarget, hostnameOf, type RuleMatcher } from "../matcher.js";
 import { CATCH_ALL_PATTERN, type HostnameRule } from "../rule.js";
 
-const toTarget = (
-  key: string,
-  title: string,
-  rule: HostnameRule,
-): GroupTarget =>
-  rule.color === undefined ? { key, title } : { key, title, color: rule.color };
-
-export const hostnameMatcher: RuleMatcher<HostnameRule> = {
-  type: "hostname",
+export const exactHostnameMatcher: RuleMatcher<HostnameRule> = {
   compile(rules) {
-    const exactRules = new Map<string, HostnameRule>();
-    let catchAllRule: HostnameRule | undefined;
-    for (const rule of rules) {
-      if (rule.pattern === CATCH_ALL_PATTERN) {
-        catchAllRule = rule;
-      } else {
-        exactRules.set(rule.pattern, rule);
-      }
-    }
-
+    const rulesByHostname = new Map(
+      rules
+        .filter((rule) => rule.pattern !== CATCH_ALL_PATTERN)
+        .map((rule) => [rule.pattern, rule]),
+    );
     return {
       match(url) {
-        const hostname = url.hostname.replace(/\.$/, "");
-        if (hostname === "") {
-          return null;
-        }
-        const exactRule = exactRules.get(hostname);
-        if (exactRule) {
-          return toTarget(
-            `rule:${exactRule.id}`,
-            exactRule.groupTitle ?? hostname,
-            exactRule,
-          );
-        }
-        if (catchAllRule) {
-          return toTarget(`hostname:${hostname}`, hostname, catchAllRule);
-        }
-        return null;
+        const hostname = hostnameOf(url);
+        const rule = rulesByHostname.get(hostname);
+        return rule
+          ? groupTarget(`rule:${rule.id}`, rule.groupTitle ?? hostname, rule)
+          : null;
+      },
+    };
+  },
+};
+
+export const catchAllMatcher: RuleMatcher<HostnameRule> = {
+  compile(rules) {
+    const catchAllRule = rules.find(
+      (rule) => rule.pattern === CATCH_ALL_PATTERN,
+    );
+    return {
+      match(url) {
+        const hostname = hostnameOf(url);
+        return catchAllRule && hostname !== ""
+          ? groupTarget(`hostname:${hostname}`, hostname, catchAllRule)
+          : null;
       },
     };
   },

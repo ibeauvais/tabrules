@@ -74,7 +74,7 @@ describe("parseRules", () => {
   });
 
   it("rejects an unknown rule type", () => {
-    expect(errorsOf([{ ...validRule, type: "regex" }])).toEqual([
+    expect(errorsOf([{ ...validRule, type: "url" }])).toEqual([
       "rules[0].type: unknown rule type",
     ]);
   });
@@ -105,18 +105,48 @@ describe("parseRules", () => {
     ]);
   });
 
+  it.each([undefined, 1])("rejects non-string pattern %j", (pattern) => {
+    expect(errorsOf([{ ...validRule, pattern }])).toEqual([
+      "rules[0].pattern: must be a string",
+    ]);
+  });
+
   it.each([
-    undefined,
-    1,
     "",
     "GitHub.com",
     "https://github.com",
     "github.com/path",
     "*.github.com",
-  ])("rejects invalid pattern %j", (pattern) => {
+  ])("rejects invalid hostname pattern %j", (pattern) => {
     expect(errorsOf([{ ...validRule, pattern }])).toEqual([
       'rules[0].pattern: must be "*" or a lowercase hostname',
     ]);
+  });
+
+  it("accepts a regex rule, with a title even when it looks like *", () => {
+    const regexRule = {
+      id: "google",
+      type: "regex",
+      pattern: "(^|\\.)google\\.com$",
+      groupTitle: "Google",
+      enabled: true,
+    };
+
+    expect(parseRules([regexRule])).toEqual({ ok: true, rules: [regexRule] });
+    expect(
+      parseRules([{ ...regexRule, pattern: ".*", groupTitle: "All" }]).ok,
+    ).toBe(true);
+  });
+
+  it.each([
+    ["", "must not be empty"],
+    ["a".repeat(254), "must be at most 253 characters"],
+    ["(?=a)", "lookarounds and named groups are not supported at position 2"],
+    ["Google", "use lowercase letters, hostnames are lowercase at position 1"],
+  ])("rejects invalid regex pattern %j", (pattern, error) => {
+    expect(
+      errorsOf([{ id: "r", type: "regex", pattern, enabled: true }]),
+    ).toEqual([`rules[0].pattern: ${error}`]);
   });
 
   it("accepts an empty group title, for an unnamed group", () => {
@@ -163,7 +193,7 @@ describe("parseRules", () => {
 
     expect(errors).toEqual([
       "rules[1].id: must be 1-64 characters among A-Z a-z 0-9 _ -",
-      'rules[1].pattern: must be "*" or a lowercase hostname',
+      "rules[1].pattern: must be a string",
       "rules[1].enabled: must be a boolean",
     ]);
   });
@@ -178,8 +208,17 @@ describe("parseRules", () => {
 
     expect(errors).toEqual([
       'rules: duplicate id "gh"',
-      'rules: duplicate pattern "github.com"',
+      'rules: duplicate hostname pattern "github.com"',
     ]);
+  });
+
+  it("allows the same pattern in an exact rule and a regex rule", () => {
+    expect(
+      parseRules([
+        validRule,
+        { id: "re", type: "regex", pattern: "github.com", enabled: true },
+      ]).ok,
+    ).toBe(true);
   });
 });
 

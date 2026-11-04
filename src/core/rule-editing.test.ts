@@ -40,6 +40,7 @@ describe("normalizeHostnameInput", () => {
 
 describe("ruleFromDraft", () => {
   const draft = (overrides: Partial<RuleDraft> = {}): RuleDraft => ({
+    matchType: "hostname",
     patternInput: "github.com",
     groupTitle: "",
     color: "",
@@ -134,4 +135,66 @@ describe("ruleFromDraft", () => {
       });
     },
   );
+
+  describe("regex rules", () => {
+    const regexDraft = (overrides: Partial<RuleDraft> = {}) =>
+      draft({ matchType: "regex", ...overrides });
+
+    it("keeps the trimmed pattern as written, with a title", () => {
+      const result = ruleFromDraft(
+        regexDraft({
+          patternInput: "  (^|\\.)google\\.com$ ",
+          groupTitle: "Google",
+        }),
+        identity,
+        [],
+      );
+
+      expect(result).toEqual({
+        ok: true,
+        rule: {
+          id: "new",
+          type: "regex",
+          pattern: "(^|\\.)google\\.com$",
+          groupTitle: "Google",
+          enabled: true,
+        },
+      });
+    });
+
+    it("keeps the title of a regex that is just *", () => {
+      const result = ruleFromDraft(
+        regexDraft({ patternInput: "^.*$", groupTitle: "Everything" }),
+        identity,
+        [],
+      );
+
+      expect(result.ok && result.rule.groupTitle).toBe("Everything");
+    });
+
+    it.each([
+      ["", "Invalid regular expression: must not be empty."],
+      [
+        "(?=x)",
+        "Invalid regular expression: lookarounds and named groups are not supported at position 2.",
+      ],
+    ])("rejects invalid pattern %j", (patternInput, error) => {
+      expect(ruleFromDraft(regexDraft({ patternInput }), identity, [])).toEqual(
+        { ok: false, error },
+      );
+    });
+
+    it("rejects a duplicate regex but not an exact rule with the same text", () => {
+      expect(
+        ruleFromDraft(regexDraft({ patternInput: "github.com" }), identity, [
+          existing,
+        ]).ok,
+      ).toBe(true);
+      expect(
+        ruleFromDraft(regexDraft({ patternInput: "github.com" }), identity, [
+          { ...existing, type: "regex" },
+        ]),
+      ).toEqual({ ok: false, error: "A rule for github.com already exists." });
+    });
+  });
 });

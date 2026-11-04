@@ -1,8 +1,9 @@
+import { compileHostnameRegex } from "./hostname-regex.js";
 import {
   CATCH_ALL_PATTERN,
   isTabGroupColor,
-  type HostnameRule,
   type Rule,
+  type RuleType,
 } from "./rule.js";
 
 export const LIMITS = {
@@ -20,7 +21,7 @@ const DNS_LABEL = "(?!-)[a-z0-9-]{1,63}(?<!-)";
 const DNS_HOSTNAME_FORMAT = new RegExp(`^${DNS_LABEL}(\\.${DNS_LABEL})*$`);
 const IPV6_LITERAL_FORMAT = /^\[[0-9a-f:.]+\]$/;
 const CONTROL_CHARACTERS = /\p{Cc}/u;
-const HOSTNAME_RULE_KEYS = new Set([
+const RULE_KEYS = new Set([
   "id",
   "type",
   "pattern",
@@ -47,16 +48,40 @@ export const isValidHostnamePattern = (pattern: string): boolean =>
 export const isValidGroupTitle = (title: string): boolean =>
   title.length <= LIMITS.maxGroupTitleLength && !CONTROL_CHARACTERS.test(title);
 
-const parseHostnameRule = (
+export const regexPatternError = (pattern: string): string | null => {
+  if (pattern === "") {
+    return "must not be empty";
+  }
+  if (pattern.length > LIMITS.maxPatternLength) {
+    return `must be at most ${String(LIMITS.maxPatternLength)} characters`;
+  }
+  const result = compileHostnameRegex(pattern);
+  return result.ok ? null : result.error;
+};
+
+const patternError = (type: RuleType, pattern: unknown): string | null => {
+  if (typeof pattern !== "string") {
+    return "must be a string";
+  }
+  if (type === "regex") {
+    return regexPatternError(pattern);
+  }
+  return isValidHostnamePattern(pattern)
+    ? null
+    : `must be "${CATCH_ALL_PATTERN}" or a lowercase hostname`;
+};
+
+const parseRuleRecord = (
+  type: RuleType,
   record: UnknownRecord,
   path: string,
   errors: string[],
-): HostnameRule | null => {
+): Rule | null => {
   const errorCountBefore = errors.length;
   const { id, pattern, groupTitle, color, enabled } = record;
 
   for (const key of Object.keys(record)) {
-    if (!HOSTNAME_RULE_KEYS.has(key)) {
+    if (!RULE_KEYS.has(key)) {
       errors.push(`${path}.${key}: unknown field`);
     }
   }
@@ -69,13 +94,12 @@ const parseHostnameRule = (
       `${path}.id: must be 1-${String(LIMITS.maxIdLength)} characters among A-Z a-z 0-9 _ -`,
     );
   }
-  if (typeof pattern !== "string" || !isValidHostnamePattern(pattern)) {
-    errors.push(
-      `${path}.pattern: must be "${CATCH_ALL_PATTERN}" or a lowercase hostname`,
-    );
+  const invalidPattern = patternError(type, pattern);
+  if (invalidPattern !== null) {
+    errors.push(`${path}.pattern: ${invalidPattern}`);
   }
   if (groupTitle !== undefined) {
-    if (pattern === CATCH_ALL_PATTERN) {
+    if (type === "hostname" && pattern === CATCH_ALL_PATTERN) {
       errors.push(
         `${path}.groupTitle: not allowed on the catch-all rule (title is the hostname)`,
       );
@@ -103,7 +127,7 @@ const parseHostnameRule = (
   ) {
     return null;
   }
-  const rule: HostnameRule = { id, type: "hostname", pattern, enabled };
+  const rule: Rule = { id, type, pattern, enabled };
   if (typeof groupTitle === "string") {
     rule.groupTitle = groupTitle;
   }
@@ -122,8 +146,8 @@ const parseRule = (
     errors.push(`${path}: must be an object`);
     return null;
   }
-  if (value.type === "hostname") {
-    return parseHostnameRule(value, path, errors);
+  if (value.type === "hostname" || value.type === "regex") {
+    return parseRuleRecord(value.type, value, path, errors);
   }
   errors.push(`${path}.type: unknown rule type`);
   return null;
@@ -131,18 +155,20 @@ const parseRule = (
 
 const findDuplicates = (
   rules: readonly Rule[],
-  field: "id" | "pattern",
+  describe: (rule: Rule) => string,
 ): string[] => {
   const seen = new Set<string>();
   const duplicates = new Set<string>();
   for (const rule of rules) {
-    const value = rule[field];
-    if (seen.has(value)) {
-      duplicates.add(value);
+    const description = describe(rule);
+    if (seen.has(description)) {
+      duplicates.add(description);
     }
-    seen.add(value);
+    seen.add(description);
   }
-  return [...duplicates].map((value) => `rules: duplicate ${field} "${value}"`);
+  return [...duplicates].map(
+    (description) => `rules: duplicate ${description}`,
+  );
 };
 
 export const parseRules = (input: unknown): ParseResult => {
@@ -163,8 +189,11 @@ export const parseRules = (input: unknown): ParseResult => {
     )
     .filter((rule) => rule !== null);
   errors.push(
-    ...findDuplicates(rules, "id"),
-    ...findDuplicates(rules, "pattern"),
+    ...findDuplicates(rules, (rule) => `id "${rule.id}"`),
+    ...findDuplicates(
+      rules,
+      (rule) => `${rule.type} pattern "${rule.pattern}"`,
+    ),
   );
 
   return errors.length > 0 ? { ok: false, errors } : { ok: true, rules };

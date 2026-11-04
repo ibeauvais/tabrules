@@ -30,4 +30,15 @@ export interface HostnameRule {
   enabled: boolean;
 }
 
-export type Rule = HostnameRule;
+export interface RegexRule {
+  id: string;
+  type: "regex";
+  pattern: string;
+  groupTitle?: string;
+  color?: TabGroupColor;
+  enabled: boolean;
+}
+
+export type Rule = HostnameRule | RegexRule;
+
+export type RuleType = Rule["type"];

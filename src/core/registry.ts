@@ -1,12 +1,7 @@
-import type { CompiledMatcher, GroupTarget, RuleMatcher } from "./matcher.js";
-import { hostnameMatcher } from "./matchers/hostname.js";
-import type { Rule } from "./rule.js";
-
-const MATCHERS: {
-  [T in Rule["type"]]: RuleMatcher<Extract<Rule, { type: T }>>;
-} = {
-  hostname: hostnameMatcher,
-};
+import type { CompiledMatcher, GroupTarget } from "./matcher.js";
+import { catchAllMatcher, exactHostnameMatcher } from "./matchers/hostname.js";
+import { regexMatcher } from "./matchers/regex.js";
+import type { HostnameRule, RegexRule, Rule } from "./rule.js";
 
 const SUPPORTED_PROTOCOLS = new Set(["http:", "https:"]);
 
@@ -15,13 +10,18 @@ export interface CompiledRules {
 }
 
 export const compileRules = (rules: readonly Rule[]): CompiledRules => {
-  const enabledRulesByType = Object.groupBy(
-    rules.filter((rule) => rule.enabled),
-    (rule) => rule.type,
+  const enabledRules = rules.filter((rule) => rule.enabled);
+  const hostnameRules = enabledRules.filter(
+    (rule): rule is HostnameRule => rule.type === "hostname",
   );
-  const compiledMatchers: CompiledMatcher[] = Object.values(MATCHERS).map(
-    (matcher) => matcher.compile(enabledRulesByType[matcher.type] ?? []),
+  const regexRules = enabledRules.filter(
+    (rule): rule is RegexRule => rule.type === "regex",
   );
+  const compiledMatchers: CompiledMatcher[] = [
+    exactHostnameMatcher.compile(hostnameRules),
+    regexMatcher.compile(regexRules),
+    catchAllMatcher.compile(hostnameRules),
+  ];
 
   return {
     match(url) {

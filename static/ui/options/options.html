@@ -26,24 +26,26 @@
         <form id="rule-form" novalidate>
           <div class="fields">
             <label>
-              <span>Hostname</span>
+              <span>Match</span>
+              <select id="match-type">
+                <option value="hostname">Exact hostname</option>
+                <option value="regex">Regular expression</option>
+              </select>
+            </label>
+            <label>
+              <span id="pattern-label">Hostname</span>
               <input
                 id="pattern"
                 required
                 autocomplete="off"
                 spellcheck="false"
                 maxlength="2048"
-                placeholder="github.com, or * for every site"
+                aria-describedby="regex-help"
               />
             </label>
             <label>
               <span>Group title</span>
-              <input
-                id="group-title"
-                autocomplete="off"
-                maxlength="100"
-                placeholder="Defaults to the hostname"
-              />
+              <input id="group-title" autocomplete="off" maxlength="100" />
             </label>
             <label>
               <span>Color</span>
@@ -52,6 +54,13 @@
               </select>
             </label>
           </div>
+          <p id="regex-help" class="muted hint" hidden>
+            Tested against the hostname only, for example
+            <code>mail.google.com</code>. <code>(^|\.)google\.com$</code>
+            matches google.com and all its subdomains. Supported:
+            <code>. [ ] ( ) | * + ? {n,m} ^ $ \d \w</code>. Lowercase only, no
+            backreferences or lookarounds.
+          </p>
           <p id="form-error" class="error" role="alert" hidden></p>
           <div class="actions">
             <button id="submit" type="submit">Add rule</button>
@@ -90,7 +99,8 @@
           <thead>
             <tr>
               <th scope="col">On</th>
-              <th scope="col">Hostname</th>
+              <th scope="col">Match</th>
+              <th scope="col">Pattern</th>
               <th scope="col">Group title</th>
               <th scope="col">Color</th>
               <th scope="col"><span class="visually-hidden">Actions</span></th>
@@ -99,9 +109,10 @@
           <tbody id="rules-body"></tbody>
         </table>
         <p class="muted hint">
-          A hostname rule matches that exact hostname only: github.com does not
-          match gist.github.com. Exact rules take precedence over
-          <code>*</code>. Groups you create yourself are never changed.
+          An exact rule matches that hostname only: github.com does not match
+          gist.github.com. Exact rules apply first, then regular expressions in
+          list order, then <code>*</code>. Groups you create yourself are never
+          changed.
         </p>
       </section>
     </main>

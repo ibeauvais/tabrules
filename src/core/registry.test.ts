@@ -58,6 +58,33 @@ describe("compileRules", () => {
     );
   });
 
+  it("applies exact rules, then regex rules, then the catch-all", () => {
+    const compiled = compileRules([
+      rule({ id: "all" }),
+      {
+        id: "google",
+        type: "regex",
+        pattern: "(^|\\.)google\\.com$",
+        enabled: true,
+      },
+      rule({ id: "mail", pattern: "mail.google.com" }),
+    ]);
+
+    expect(compiled.match("https://mail.google.com/")?.key).toBe("rule:mail");
+    expect(compiled.match("https://docs.google.com/")?.key).toBe("rule:google");
+    expect(compiled.match("https://github.com/")?.key).toBe(
+      "hostname:github.com",
+    );
+  });
+
+  it("ignores disabled regex rules", () => {
+    const compiled = compileRules([
+      { id: "google", type: "regex", pattern: "google", enabled: false },
+    ]);
+
+    expect(compiled.match("https://google.com/")).toBeNull();
+  });
+
   it("returns null when no rule matches", () => {
     expect(
       compileRules([rule({ pattern: "github.com" })]).match(

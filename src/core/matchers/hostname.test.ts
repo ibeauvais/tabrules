@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HostnameRule } from "../rule.js";
-import { hostnameMatcher } from "./hostname.js";
+import { catchAllMatcher, exactHostnameMatcher } from "./hostname.js";
 
 const rule = (overrides: Partial<HostnameRule> = {}): HostnameRule => ({
   id: "r1",
@@ -10,10 +10,10 @@ const rule = (overrides: Partial<HostnameRule> = {}): HostnameRule => ({
   ...overrides,
 });
 
-const match = (rules: HostnameRule[], url: string) =>
-  hostnameMatcher.compile(rules).match(new URL(url));
+describe("exactHostnameMatcher", () => {
+  const match = (rules: HostnameRule[], url: string) =>
+    exactHostnameMatcher.compile(rules).match(new URL(url));
 
-describe("hostnameMatcher", () => {
   it("returns null when there are no rules", () => {
     expect(match([], "https://github.com/")).toBeNull();
   });
@@ -54,26 +54,8 @@ describe("hostnameMatcher", () => {
     ).toBeNull();
   });
 
-  it("groups any hostname with the catch-all rule, one group per hostname", () => {
-    const rules = [rule({ id: "all", color: "grey" })];
-
-    expect(match(rules, "https://mail.google.com/")).toEqual({
-      key: "hostname:mail.google.com",
-      title: "mail.google.com",
-      color: "grey",
-    });
-    expect(match(rules, "https://docs.google.com/")?.key).toBe(
-      "hostname:docs.google.com",
-    );
-  });
-
-  it("gives exact rules precedence over the catch-all regardless of order", () => {
-    const rules = [
-      rule({ id: "all" }),
-      rule({ id: "gh", pattern: "github.com" }),
-    ];
-
-    expect(match(rules, "https://github.com/")?.key).toBe("rule:gh");
+  it("ignores the catch-all rule", () => {
+    expect(match([rule()], "https://github.com/")).toBeNull();
   });
 
   it.each([
@@ -84,8 +66,32 @@ describe("hostnameMatcher", () => {
     ["IPv4", "http://192.168.1.10:8080/", "192.168.1.10"],
     ["IPv6", "http://[::1]:8080/", "[::1]"],
     ["IDN as punycode", "https://café.fr/", "xn--caf-dma.fr"],
-  ])("normalizes the hostname (%s)", (_case, url, expectedTitle) => {
-    expect(match([rule()], url)?.title).toBe(expectedTitle);
+  ])("normalizes the hostname (%s)", (_case, url, hostname) => {
+    expect(match([rule({ pattern: hostname })], url)?.title).toBe(hostname);
+  });
+});
+
+describe("catchAllMatcher", () => {
+  const match = (rules: HostnameRule[], url: string) =>
+    catchAllMatcher.compile(rules).match(new URL(url));
+
+  it("returns null without a catch-all rule", () => {
+    expect(
+      match([rule({ pattern: "github.com" })], "https://github.com/"),
+    ).toBeNull();
+  });
+
+  it("groups any hostname, one group per hostname", () => {
+    const rules = [rule({ id: "all", color: "grey" })];
+
+    expect(match(rules, "https://mail.google.com/")).toEqual({
+      key: "hostname:mail.google.com",
+      title: "mail.google.com",
+      color: "grey",
+    });
+    expect(match(rules, "https://docs.google.com./")?.key).toBe(
+      "hostname:docs.google.com",
+    );
   });
 
   it("returns null for a URL without hostname", () => {

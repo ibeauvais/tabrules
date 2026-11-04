@@ -4,6 +4,7 @@ import {
   isTabGroupColor,
   TAB_GROUP_COLOR_NAMES,
   type Rule,
+  type RuleType,
 } from "../../core/rule.js";
 import {
   MAX_RULES_FILE_BYTES,
@@ -16,6 +17,9 @@ import { loadRules, onSettingsChanged, saveRules } from "../settings-store.js";
 
 const form = requireElement("rule-form", HTMLFormElement);
 const formTitle = requireElement("form-title", HTMLHeadingElement);
+const matchTypeSelect = requireElement("match-type", HTMLSelectElement);
+const patternLabel = requireElement("pattern-label", HTMLSpanElement);
+const regexHelp = requireElement("regex-help", HTMLParagraphElement);
 const patternInput = requireElement("pattern", HTMLInputElement);
 const groupTitleInput = requireElement("group-title", HTMLInputElement);
 const colorSelect = requireElement("color", HTMLSelectElement);
@@ -37,7 +41,11 @@ const MAX_REPORTED_IMPORT_ERRORS = 3;
 let rules: Rule[] = [];
 let editingRuleId: string | null = null;
 
-const isCatchAll = (rule: Rule) => rule.pattern === CATCH_ALL_PATTERN;
+const isCatchAll = (rule: Rule) =>
+  rule.type === "hostname" && rule.pattern === CATCH_ALL_PATTERN;
+
+const selectedMatchType = (): RuleType =>
+  matchTypeSelect.value === "regex" ? "regex" : "hostname";
 
 const persist = async (nextRules: Rule[]): Promise<void> => {
   await saveRules(nextRules);
@@ -52,8 +60,19 @@ const runListAction = (action: () => Promise<void>): void => {
   });
 };
 
-const updateTitleAvailability = (): void => {
-  const isCatchAllInput = patternInput.value.trim() === CATCH_ALL_PATTERN;
+const updateFormForMatchType = (): void => {
+  const isRegex = selectedMatchType() === "regex";
+  patternLabel.textContent = isRegex ? "Regular expression" : "Hostname";
+  patternInput.placeholder = isRegex
+    ? "(^|\\.)google\\.com$"
+    : `github.com, or ${CATCH_ALL_PATTERN} for every site`;
+  groupTitleInput.placeholder = isRegex
+    ? "Defaults to the pattern"
+    : "Defaults to the hostname";
+  regexHelp.hidden = !isRegex;
+
+  const isCatchAllInput =
+    !isRegex && patternInput.value.trim() === CATCH_ALL_PATTERN;
   groupTitleInput.disabled = isCatchAllInput;
   if (isCatchAllInput) {
     groupTitleInput.value = "";
@@ -67,11 +86,12 @@ const resetForm = (): void => {
   submitButton.textContent = "Add rule";
   cancelButton.hidden = true;
   showMessage(formError, "");
-  updateTitleAvailability();
+  updateFormForMatchType();
 };
 
 const startEditing = (rule: Rule): void => {
   editingRuleId = rule.id;
+  matchTypeSelect.value = rule.type;
   patternInput.value = rule.pattern;
   groupTitleInput.value = rule.groupTitle ?? "";
   colorSelect.value = rule.color ?? "";
@@ -79,7 +99,7 @@ const startEditing = (rule: Rule): void => {
   submitButton.textContent = "Save rule";
   cancelButton.hidden = false;
   showMessage(formError, "");
-  updateTitleAvailability();
+  updateFormForMatchType();
   patternInput.focus();
 };
 
@@ -152,6 +172,7 @@ const renderRow = (rule: Rule): HTMLTableRowElement => {
 
   return createElement("tr", {}, [
     createElement("td", {}, [enabledToggle]),
+    createElement("td", { text: rule.type === "regex" ? "Regex" : "Exact" }),
     patternCell,
     titleCell,
     colorCell,
@@ -227,13 +248,16 @@ for (const color of TAB_GROUP_COLOR_NAMES) {
   );
 }
 
-patternInput.addEventListener("input", updateTitleAvailability);
+matchTypeSelect.addEventListener("change", updateFormForMatchType);
+patternInput.addEventListener("input", updateFormForMatchType);
+updateFormForMatchType();
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   const editedRule = rules.find((rule) => rule.id === editingRuleId);
   const result = ruleFromDraft(
     {
+      matchType: selectedMatchType(),
       patternInput: patternInput.value,
       groupTitle: groupTitleInput.value,
       color: isTabGroupColor(colorSelect.value) ? colorSelect.value : "",

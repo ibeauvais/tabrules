@@ -15,15 +15,19 @@ First rule type: **full hostname**.
 ## 1. Scope
 
 - **The `hostname` rule.** `new URL(url).hostname`, lower-cased. `mail.google.com` and `docs.google.com` go into two separate groups. `www.github.com` and `github.com` are also kept separate; normalizing them can come later as a per-rule option.
-- **Pattern `*`.** A catch-all rule that creates one group per hostname, so the user doesn't have to declare every site. Exact hostname rules take precedence over it. It cannot have a `groupTitle`: each group is titled with its hostname.
+- **Pattern `*`.** A catch-all rule that creates one group per hostname, so the user doesn't have to declare every site. Every other rule takes precedence over it. It cannot have a `groupTitle`: each group is titled with its hostname.
+- **The `regex` rule.** A regular expression tested against the hostname only, with search semantics like `RegExp.test`. For example, `(^|\.)google\.com$` matches google.com and all its subdomains. All matching hostnames go into one group, titled with the rule's `groupTitle` or else the pattern.
+  - Supported syntax: `. [ ] [^ ] ( ) (?: ) | * + ? {n,m} ^ $ \d \w` and escaped metacharacters.
+  - Rejected with an explicit error: backreferences, lookarounds, other escapes and uppercase letters.
+- **Precedence.** Exact hostname rules first, then regex rules in list order, then `*`.
 - **Hostname normalization.** The port, credentials and a trailing dot are ignored. IDNs stay in punycode (`xn--caf-dma.fr`), which avoids homograph look-alikes in group titles.
 - **Schemes.** Only `http:` and `https:` are handled. `chrome://`, `about:`, `file:`, `data:`, extension pages and pinned tabs are ignored.
 - **Extensibility.** Every rule type implements one interface and is registered in a registry. A new rule type means one new matcher file plus its tests; the engine doesn't change.
   ```ts
   interface RuleMatcher<R extends Rule> {
-    readonly type: R["type"];
     compile(rules: readonly R[]): CompiledMatcher; // precompute once per rules change
   }
+  // registry.ts runs the compiled matchers in precedence order: exact, regex, catch-all
   interface CompiledMatcher {
     match(url: URL): GroupTarget | null; // null = no match
   }
@@ -84,7 +88,10 @@ manifest.json
 - Hostname patterns: the charset `[a-z0-9.-]`, or `*`.
 - Limits: at most 253 characters per pattern, 100 characters per group title, 500 rules.
 - Colors are checked against the `chrome.tabGroups.Color` enum.
-- Future `regex` rule type: ReDoS risk. Either cap pattern complexity or use only anchored literal and wildcard patterns. Decide when that type is added.
+- **Regex patterns never reach the native `RegExp` engine.** That engine backtracks, so a pattern like `^(a+)+$` can take exponential time. It cannot be interrupted, and a service worker cannot offload it to a Worker.
+  - `src/core/hostname-regex.ts` compiles the supported subset into a Thompson NFA and simulates it, which is the approach of RE2 and Go.
+  - Matching time is O(states × hostname length). States are capped at 2,000, repeat counts at 63, and hostnames are at most 253 characters, so ReDoS is impossible by construction.
+  - Differential tests check that it agrees with the native engine on a corpus of patterns and hostnames.
 
 **Supply chain and CI** (GitHub Actions)
 
@@ -111,7 +118,9 @@ manifest.json
 - **Parallel groups.** Within a pass, groups are created in parallel. Chrome takes about 100 ms per `tabs.group` call in headless mode, so ten groups take about 1.3 s sequentially and 0.4 s in parallel. Buckets sharing a title in the same window stay sequential, so title adoption never creates duplicate groups.
 - **Budgets** (measured on an Apple Silicon laptop, headless Chrome for Testing).
   - "Group all" on 300 loaded tabs across 10 hostnames: 370-700 ms measured, of which about 400 ms is Chrome's own API time. The e2e test fails above 2 s. That leaves headroom for shared CI runners while still catching a regression like the 4.9 s seen without coalescing.
-  - Unpacked size under 50 KB.
+  - Unpacked size under 100 KB; currently 72 KB.
+    - That is 49 KB of JavaScript (12 KB gzipped), 12 KB of icons and 10 KB of HTML and CSS.
+    - JavaScript ships unminified on purpose, so the published code stays readable for audits.
 
 ## 6. Grouping behaviour and edge cases
 

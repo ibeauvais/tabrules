@@ -11,6 +11,14 @@ export interface CompiledMatcher {
 }
 
 export interface RuleMatcher<R extends Rule> {
-  readonly type: R["type"];
   compile(rules: readonly R[]): CompiledMatcher;
 }
+
+export const hostnameOf = (url: URL): string => url.hostname.replace(/\.$/, "");
+
+export const groupTarget = (
+  key: string,
+  title: string,
+  rule: Rule,
+): GroupTarget =>
+  rule.color === undefined ? { key, title } : { key, title, color: rule.color };

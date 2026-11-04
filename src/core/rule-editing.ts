@@ -1,22 +1,28 @@
 import {
   CATCH_ALL_PATTERN,
-  type HostnameRule,
+  type Rule,
+  type RuleType,
   type TabGroupColor,
 } from "./rule.js";
 import {
   isValidGroupTitle,
   isValidHostnamePattern,
   LIMITS,
+  regexPatternError,
 } from "./validation.js";
 
 export interface RuleDraft {
+  matchType: RuleType;
   patternInput: string;
   groupTitle: string;
   color: TabGroupColor | "";
 }
 
 export type DraftResult =
-  { ok: true; rule: HostnameRule } | { ok: false; error: string };
+  { ok: true; rule: Rule } | { ok: false; error: string };
+
+type PatternResult =
+  { ok: true; pattern: string } | { ok: false; error: string };
 
 const SUPPORTED_PROTOCOLS = new Set(["http:", "https:"]);
 
@@ -39,20 +45,38 @@ export const normalizeHostnameInput = (input: string): string | null => {
     : null;
 };
 
+const patternFromDraft = (draft: RuleDraft): PatternResult => {
+  if (draft.matchType === "regex") {
+    const pattern = draft.patternInput.trim();
+    const error = regexPatternError(pattern);
+    return error === null
+      ? { ok: true, pattern }
+      : { ok: false, error: `Invalid regular expression: ${error}.` };
+  }
+  const pattern = normalizeHostnameInput(draft.patternInput);
+  return pattern === null
+    ? {
+        ok: false,
+        error: `Enter a hostname such as github.com, or ${CATCH_ALL_PATTERN} for every site.`,
+      }
+    : { ok: true, pattern };
+};
+
 export const ruleFromDraft = (
   draft: RuleDraft,
-  identity: Pick<HostnameRule, "id" | "enabled">,
-  existingRules: readonly HostnameRule[],
+  identity: Pick<Rule, "id" | "enabled">,
+  existingRules: readonly Rule[],
 ): DraftResult => {
-  const pattern = normalizeHostnameInput(draft.patternInput);
-  if (pattern === null) {
-    return {
-      ok: false,
-      error: `Enter a hostname such as github.com, or ${CATCH_ALL_PATTERN} for every site.`,
-    };
+  const patternResult = patternFromDraft(draft);
+  if (!patternResult.ok) {
+    return patternResult;
   }
+  const { pattern } = patternResult;
   const isDuplicate = existingRules.some(
-    (rule) => rule.id !== identity.id && rule.pattern === pattern,
+    (rule) =>
+      rule.id !== identity.id &&
+      rule.type === draft.matchType &&
+      rule.pattern === pattern,
   );
   if (isDuplicate) {
     return { ok: false, error: `A rule for ${pattern} already exists.` };
@@ -65,8 +89,10 @@ export const ruleFromDraft = (
     };
   }
 
-  const rule: HostnameRule = { ...identity, type: "hostname", pattern };
-  if (groupTitle !== "" && pattern !== CATCH_ALL_PATTERN) {
+  const rule: Rule = { ...identity, type: draft.matchType, pattern };
+  const isCatchAll =
+    draft.matchType === "hostname" && pattern === CATCH_ALL_PATTERN;
+  if (groupTitle !== "" && !isCatchAll) {
     rule.groupTitle = groupTitle;
   }
   if (draft.color !== "") {
