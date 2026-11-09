@@ -85,7 +85,7 @@ Requirements: the Node.js version from `.tool-versions` (`asdf install`).
 ```sh
 npm ci                                 # install dev dependencies (install scripts are disabled in .npmrc)
 npx puppeteer browsers install chrome  # Chrome for Testing, needed by test:e2e, icons and store assets
-npm run check                          # typecheck, lint, format check, unit tests with coverage, build
+npm run check                          # lockfile sources, typecheck, lint, format check, unit tests with coverage, build
 npm run test:e2e                       # build, then end-to-end tests in headless Chrome (offline)
 npm run build                          # unpacked extension in dist/
 npm run package                        # reproducible zip and checksum in release/
