@@ -1,6 +1,6 @@
 {
   "name": "tabrules",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Chrome extension that groups tabs automatically with user-defined rules. No network access, no data collection.",
   "license": "MIT",
@@ -10,7 +10,9 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "package": "npm run build && node scripts/package.mjs",
     "icons": "node scripts/render-icons.mjs",
+    "store-assets": "npm run build && node scripts/render-store-assets.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json",
     "lint": "eslint .",
     "format": "prettier --write .",
