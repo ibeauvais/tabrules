@@ -100,6 +100,9 @@ manifest.json
 **Supply chain and CI** (GitHub Actions)
 
 - Lockfile committed. `npm ci --ignore-scripts`. Renovate or Dependabot. `npm audit` gates the build.
+- Every lockfile entry must resolve to its own tarball on `registry.npmjs.org` with a sha512 integrity (`npm run lockfile:check`).
+- `npm audit signatures` checks registry signatures and provenance attestations.
+- Pull requests that add a dependency with a known advisory, including malware, are blocked by `actions/dependency-review-action`.
 - Third-party actions pinned by commit SHA. `permissions: read-all` by default and raised per job only when needed.
 - CodeQL scanning.
 - Release pipeline:
