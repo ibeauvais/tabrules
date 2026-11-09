@@ -24,9 +24,10 @@ const describeRules = (rules: readonly Rule[]): string => {
 const refresh = async (): Promise<void> => {
   const [stored, enabled] = await Promise.all([loadRules(), loadEnabled()]);
   enabledToggle.checked = enabled;
-  summary.textContent = stored.isCorrupted
-    ? "Saved rules are invalid. Open the settings to fix them."
-    : describeRules(stored.rules);
+  summary.textContent =
+    stored.invalidCount > 0
+      ? `${describeRules(stored.rules)} Some saved rules are invalid, see the settings.`
+      : describeRules(stored.rules);
 };
 
 const reportError = (error: unknown): void => {

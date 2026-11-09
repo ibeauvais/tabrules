@@ -171,23 +171,37 @@ const findDuplicates = (
   );
 };
 
-export const parseRules = (input: unknown): ParseResult => {
+interface CollectedRules {
+  rules: Rule[];
+  errors: string[];
+}
+
+const collectRules = (input: unknown): CollectedRules => {
   if (!Array.isArray(input)) {
-    return { ok: false, errors: ["rules: must be an array"] };
+    return { rules: [], errors: ["rules: must be an array"] };
   }
   if (input.length > LIMITS.maxRules) {
     return {
-      ok: false,
+      rules: [],
       errors: [`rules: at most ${String(LIMITS.maxRules)} rules are allowed`],
     };
   }
-
   const errors: string[] = [];
   const rules = input
     .map((value: unknown, index) =>
       parseRule(value, `rules[${String(index)}]`, errors),
     )
     .filter((rule) => rule !== null);
+  return { rules, errors };
+};
+
+const ruleIdentityKeys = (rule: Rule): string[] => [
+  `id "${rule.id}"`,
+  `${rule.type} pattern "${rule.pattern}"`,
+];
+
+export const parseRules = (input: unknown): ParseResult => {
+  const { rules, errors } = collectRules(input);
   errors.push(
     ...findDuplicates(rules, (rule) => `id "${rule.id}"`),
     ...findDuplicates(
@@ -195,6 +209,21 @@ export const parseRules = (input: unknown): ParseResult => {
       (rule) => `${rule.type} pattern "${rule.pattern}"`,
     ),
   );
-
   return errors.length > 0 ? { ok: false, errors } : { ok: true, rules };
+};
+
+export const parseRulesLenient = (input: unknown): CollectedRules => {
+  const { rules, errors } = collectRules(input);
+  const seenKeys = new Set<string>();
+  const keptRules = rules.filter((rule) => {
+    const keys = ruleIdentityKeys(rule);
+    const duplicateKey = keys.find((key) => seenKeys.has(key));
+    if (duplicateKey !== undefined) {
+      errors.push(`rules: duplicate ${duplicateKey}`);
+      return false;
+    }
+    keys.forEach((key) => seenKeys.add(key));
+    return true;
+  });
+  return { rules: keptRules, errors };
 };

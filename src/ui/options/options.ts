@@ -195,8 +195,8 @@ const refresh = async (): Promise<void> => {
   rules = stored.rules;
   showMessage(
     storageError,
-    stored.isCorrupted
-      ? "Your saved rules are invalid and are being ignored. Add or import rules to replace them."
+    stored.invalidCount > 0
+      ? `${String(stored.invalidCount)} problem(s) found in your saved rules: the affected rules are ignored and will be removed at the next change.`
       : "",
   );
   render();

@@ -1,5 +1,5 @@
 import { compileRules, type CompiledRules } from "../core/registry.js";
-import { parseRules } from "../core/validation.js";
+import { parseRulesLenient } from "../core/validation.js";
 import { createCachedValue, type CachedValue } from "./cached-value.js";
 import { log } from "./log.js";
 
@@ -7,12 +7,14 @@ const compileStoredRules = (storedRules: unknown): CompiledRules => {
   if (storedRules === undefined) {
     return compileRules([]);
   }
-  const result = parseRules(storedRules);
-  if (!result.ok) {
-    log("error", "stored_rules_invalid", { errorCount: result.errors.length });
-    return compileRules([]);
+  const { rules, errors } = parseRulesLenient(storedRules);
+  if (errors.length > 0) {
+    log("error", "stored_rules_invalid", {
+      errorCount: errors.length,
+      appliedRuleCount: rules.length,
+    });
   }
-  return compileRules(result.rules);
+  return compileRules(rules);
 };
 
 export const createRulesCache = (

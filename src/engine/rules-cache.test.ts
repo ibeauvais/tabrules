@@ -27,22 +27,32 @@ describe("createRulesCache", () => {
     expect((await cache.get()).match("https://github.com/")).toBeNull();
   });
 
-  it("uses no rules and logs the error count when stored rules are invalid", async () => {
+  it("applies the valid rules and logs counts when some stored rules are invalid", async () => {
     const errorSpy = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
     const cache = createRulesCache(() =>
       Promise.resolve([
-        { ...catchAllRule, pattern: "secret.example.com/path" },
+        {
+          id: "future",
+          type: "url-prefix",
+          pattern: "https://x/",
+          enabled: true,
+        },
+        { ...catchAllRule, id: "broken", pattern: "secret.example.com/path" },
+        catchAllRule,
       ]),
     );
 
-    expect((await cache.get()).match("https://github.com/")).toBeNull();
+    expect((await cache.get()).match("https://github.com/")?.key).toBe(
+      "hostname:github.com",
+    );
     expect(errorSpy).toHaveBeenCalledWith(
       JSON.stringify({
         level: "error",
         event: "stored_rules_invalid",
-        errorCount: 1,
+        errorCount: 2,
+        appliedRuleCount: 1,
       }),
     );
   });

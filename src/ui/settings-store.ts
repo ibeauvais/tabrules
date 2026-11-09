@@ -1,10 +1,10 @@
 import type { Rule } from "../core/rule.js";
-import { parseRules } from "../core/validation.js";
+import { parseRules, parseRulesLenient } from "../core/validation.js";
 import { STORAGE_KEYS } from "../shared/storage-keys.js";
 
 export interface StoredRules {
   rules: Rule[];
-  isCorrupted: boolean;
+  invalidCount: number;
 }
 
 const readLocal = async (key: string): Promise<unknown> => {
@@ -15,12 +15,10 @@ const readLocal = async (key: string): Promise<unknown> => {
 export const loadRules = async (): Promise<StoredRules> => {
   const storedRules = await readLocal(STORAGE_KEYS.rules);
   if (storedRules === undefined) {
-    return { rules: [], isCorrupted: false };
+    return { rules: [], invalidCount: 0 };
   }
-  const result = parseRules(storedRules);
-  return result.ok
-    ? { rules: result.rules, isCorrupted: false }
-    : { rules: [], isCorrupted: true };
+  const { rules, errors } = parseRulesLenient(storedRules);
+  return { rules, invalidCount: errors.length };
 };
 
 export const saveRules = async (rules: readonly Rule[]): Promise<void> => {

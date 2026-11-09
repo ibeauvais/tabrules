@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isValidHostnamePattern, LIMITS, parseRules } from "./validation.js";
+import {
+  isValidHostnamePattern,
+  LIMITS,
+  parseRules,
+  parseRulesLenient,
+} from "./validation.js";
 
 const validRule = {
   id: "gh",
@@ -219,6 +224,43 @@ describe("parseRules", () => {
         { id: "re", type: "regex", pattern: "github.com", enabled: true },
       ]).ok,
     ).toBe(true);
+  });
+});
+
+describe("parseRulesLenient", () => {
+  it("keeps valid rules and reports invalid ones", () => {
+    const result = parseRulesLenient([
+      validRule,
+      { ...validRule, id: "x", type: "url-prefix" },
+    ]);
+
+    expect(result).toEqual({
+      rules: [validRule],
+      errors: ["rules[1].type: unknown rule type"],
+    });
+  });
+
+  it("keeps the first of duplicate rules", () => {
+    const result = parseRulesLenient([
+      validRule,
+      { ...validRule, pattern: "gitlab.com" },
+      { ...validRule, id: "other" },
+    ]);
+
+    expect(result).toEqual({
+      rules: [validRule],
+      errors: [
+        'rules: duplicate id "gh"',
+        'rules: duplicate hostname pattern "github.com"',
+      ],
+    });
+  });
+
+  it("returns no rules for a non-array input", () => {
+    expect(parseRulesLenient("oops")).toEqual({
+      rules: [],
+      errors: ["rules: must be an array"],
+    });
   });
 });
 
