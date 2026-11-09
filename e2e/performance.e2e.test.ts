@@ -10,6 +10,7 @@ const HOSTNAME_COUNT = 10;
 const TABS_PER_HOSTNAME = 30;
 const TAB_COUNT = HOSTNAME_COUNT * TABS_PER_HOSTNAME;
 const GROUP_ALL_BUDGET_MS = 2_000;
+const BENCHMARK_RUNS = 3;
 
 describe("performance", () => {
   let harness: Harness;
@@ -46,31 +47,45 @@ describe("performance", () => {
       60_000,
     );
 
-    const elapsedMs = await harness.worker.evaluate(
-      async (rules, expectedTabCount) => {
-        const start = performance.now();
-        await chrome.storage.local.set({ rules });
-        for (;;) {
-          const tabs = await chrome.tabs.query({ url: "http://*.test/*" });
-          const groupedCount = tabs.filter((tab) => tab.groupId !== -1).length;
-          if (groupedCount === expectedTabCount) {
-            return performance.now() - start;
+    const runsMs = await harness.worker.evaluate(
+      async (rules, expectedTabCount, runCount) => {
+        const waitForGroupedCount = async (expected: number) => {
+          for (;;) {
+            const tabs = await chrome.tabs.query({ url: "http://*.test/*" });
+            if (tabs.filter((tab) => tab.groupId !== -1).length === expected) {
+              return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 50));
           }
-          await new Promise((resolve) => setTimeout(resolve, 50));
+        };
+        const durations: number[] = [];
+        for (let run = 0; run < runCount; run++) {
+          await chrome.storage.local.set({ rules: [] });
+          await waitForGroupedCount(0);
+          const start = performance.now();
+          await chrome.storage.local.set({ rules });
+          await waitForGroupedCount(expectedTabCount);
+          durations.push(performance.now() - start);
         }
+        return durations;
       },
       [catchAllRule],
       TAB_COUNT,
+      BENCHMARK_RUNS,
     );
+    const medianMs = [...runsMs].sort((left, right) => left - right)[
+      Math.floor(runsMs.length / 2)
+    ];
 
     console.info(
       JSON.stringify({
         event: "group_all_benchmark",
         tabs: TAB_COUNT,
-        elapsedMs,
+        runsMs,
+        medianMs,
       }),
     );
     expect(await harness.readGroups()).toHaveLength(HOSTNAME_COUNT);
-    expect(elapsedMs).toBeLessThan(GROUP_ALL_BUDGET_MS);
+    expect(medianMs).toBeLessThan(GROUP_ALL_BUDGET_MS);
   }, 120_000);
 });

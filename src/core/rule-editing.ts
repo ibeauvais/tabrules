@@ -100,3 +100,39 @@ export const ruleFromDraft = (
   }
   return { ok: true, rule };
 };
+
+export const isCatchAllRule = (rule: Rule): boolean =>
+  rule.type === "hostname" && rule.pattern === CATCH_ALL_PATTERN;
+
+export const insertRule = (rules: readonly Rule[], newRule: Rule): Rule[] => {
+  const catchAllIndex = rules.findIndex(isCatchAllRule);
+  if (catchAllIndex === -1 || isCatchAllRule(newRule)) {
+    return [...rules, newRule];
+  }
+  return rules.toSpliced(catchAllIndex, 0, newRule);
+};
+
+export const moveRule = (
+  rules: readonly Rule[],
+  ruleId: string,
+  offset: -1 | 1,
+): Rule[] => {
+  const index = rules.findIndex((rule) => rule.id === ruleId);
+  const target = index + offset;
+  const moved = rules[index];
+  if (moved === undefined || target < 0 || target >= rules.length) {
+    return [...rules];
+  }
+  return rules.toSpliced(index, 1).toSpliced(target, 0, moved);
+};
+
+export const shadowedRuleIds = (rules: readonly Rule[]): Set<string> => {
+  const catchAllIndex = rules.findIndex(
+    (rule) => rule.enabled && isCatchAllRule(rule),
+  );
+  return new Set(
+    catchAllIndex === -1
+      ? []
+      : rules.slice(catchAllIndex + 1).map((rule) => rule.id),
+  );
+};

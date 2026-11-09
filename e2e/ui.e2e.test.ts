@@ -72,6 +72,61 @@ describe("options page and popup", () => {
     await page.close();
   });
 
+  it("changes the priority with the move buttons", async () => {
+    await harness.setStorage({
+      rules: [
+        { id: "a", type: "hostname", pattern: "alpha.test", enabled: true },
+        { id: "b", type: "hostname", pattern: "beta.test", enabled: true },
+      ],
+    });
+    const page = await harness.browser.newPage();
+    await page.goto(harness.extensionUrl("ui/options/options.html"));
+
+    await page.click('button[aria-label="Move rule for alpha.test down"]');
+
+    const ruleIds = await waitFor(
+      async () =>
+        ((await harness.readStorage("rules")) as { id: string }[]).map(
+          (rule) => rule.id,
+        ),
+      (ids) => ids[0] === "b",
+    );
+    expect(ruleIds).toEqual(["b", "a"]);
+    expect(
+      await page.$eval(
+        'button[aria-label="Move rule for beta.test up"]',
+        (button) => button.hasAttribute("disabled"),
+      ),
+    ).toBe(true);
+    await page.close();
+  });
+
+  it("adds a new rule above the catch-all and flags rules it shadows", async () => {
+    await harness.setStorage({
+      rules: [
+        { id: "all", type: "hostname", pattern: "*", enabled: true },
+        { id: "late", type: "hostname", pattern: "late.test", enabled: true },
+      ],
+    });
+    const page = await harness.browser.newPage();
+    await page.goto(harness.extensionUrl("ui/options/options.html"));
+    expect(
+      await page.$$eval("#rules-body .warning", (warnings) => warnings.length),
+    ).toBe(1);
+
+    await page.type("#pattern", "alpha.test");
+    await page.click("#submit");
+
+    const rules = await waitFor(
+      () => harness.readStorage("rules"),
+      (stored) => Array.isArray(stored) && stored.length === 3,
+    );
+    expect(
+      (rules as { pattern: string }[]).map((rule) => rule.pattern),
+    ).toEqual(["alpha.test", "*", "late.test"]);
+    await page.close();
+  });
+
   it("shows an error for an invalid regex", async () => {
     const page = await harness.browser.newPage();
     await page.goto(harness.extensionUrl("ui/options/options.html"));

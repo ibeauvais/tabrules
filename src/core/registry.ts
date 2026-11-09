@@ -1,4 +1,9 @@
-import type { CompiledMatcher, GroupTarget } from "./matcher.js";
+import type {
+  Candidate,
+  CompiledMatcher,
+  GroupTarget,
+  RankedRule,
+} from "./matcher.js";
 import { catchAllMatcher, exactHostnameMatcher } from "./matchers/hostname.js";
 import { regexMatcher } from "./matchers/regex.js";
 import type { HostnameRule, RegexRule, Rule } from "./rule.js";
@@ -9,17 +14,23 @@ export interface CompiledRules {
   match(url: string): GroupTarget | null;
 }
 
+const isRankedOfType =
+  <R extends Rule>(type: R["type"]) =>
+  (ranked: RankedRule<Rule>): ranked is RankedRule<R> =>
+    ranked.rule.type === type;
+
 export const compileRules = (rules: readonly Rule[]): CompiledRules => {
-  const enabledRules = rules.filter((rule) => rule.enabled);
-  const hostnameRules = enabledRules.filter(
-    (rule): rule is HostnameRule => rule.type === "hostname",
-  );
-  const regexRules = enabledRules.filter(
-    (rule): rule is RegexRule => rule.type === "regex",
+  const rankedRules = rules
+    .map((rule, priority) => ({ rule, priority }))
+    .filter(({ rule }) => rule.enabled);
+  const hostnameRules = rankedRules.filter(
+    isRankedOfType<HostnameRule>("hostname"),
   );
   const compiledMatchers: CompiledMatcher[] = [
     exactHostnameMatcher.compile(hostnameRules),
-    regexMatcher.compile(regexRules),
+    regexMatcher.compile(
+      rankedRules.filter(isRankedOfType<RegexRule>("regex")),
+    ),
     catchAllMatcher.compile(hostnameRules),
   ];
 
@@ -32,13 +43,14 @@ export const compileRules = (rules: readonly Rule[]): CompiledRules => {
       if (!SUPPORTED_PROTOCOLS.has(parsedUrl.protocol)) {
         return null;
       }
+      let best: Candidate | null = null;
       for (const matcher of compiledMatchers) {
-        const target = matcher.match(parsedUrl);
-        if (target) {
-          return target;
+        const found = matcher.match(parsedUrl);
+        if (found && (best === null || found.priority < best.priority)) {
+          best = found;
         }
       }
-      return null;
+      return best?.target ?? null;
     },
   };
 };

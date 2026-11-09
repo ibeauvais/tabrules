@@ -1,10 +1,93 @@
 import { describe, expect, it } from "vitest";
-import type { HostnameRule } from "./rule.js";
+import type { HostnameRule, Rule } from "./rule.js";
 import {
+  insertRule,
+  moveRule,
   normalizeHostnameInput,
   ruleFromDraft,
+  shadowedRuleIds,
   type RuleDraft,
 } from "./rule-editing.js";
+
+const hostnameRule = (id: string, pattern = `${id}.test`): Rule => ({
+  id,
+  type: "hostname",
+  pattern,
+  enabled: true,
+});
+const catchAll = hostnameRule("all", "*");
+const idsOf = (rules: readonly Rule[]) => rules.map((rule) => rule.id);
+
+describe("insertRule", () => {
+  it("appends when there is no catch-all", () => {
+    expect(idsOf(insertRule([hostnameRule("a")], hostnameRule("b")))).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+
+  it("inserts just above the catch-all so the new rule is not shadowed", () => {
+    expect(
+      idsOf(insertRule([hostnameRule("a"), catchAll], hostnameRule("b"))),
+    ).toEqual(["a", "b", "all"]);
+  });
+
+  it("appends a new catch-all at the end", () => {
+    expect(idsOf(insertRule([hostnameRule("a")], catchAll))).toEqual([
+      "a",
+      "all",
+    ]);
+  });
+
+  it("inserts a regex rule above the catch-all too", () => {
+    const regexRule: Rule = {
+      id: "re",
+      type: "regex",
+      pattern: "x",
+      enabled: true,
+    };
+
+    expect(idsOf(insertRule([catchAll], regexRule))).toEqual(["re", "all"]);
+  });
+});
+
+describe("moveRule", () => {
+  const rules = [hostnameRule("a"), hostnameRule("b"), hostnameRule("c")];
+
+  it.each([
+    ["b", -1, ["b", "a", "c"]],
+    ["b", 1, ["a", "c", "b"]],
+    ["a", -1, ["a", "b", "c"]],
+    ["c", 1, ["a", "b", "c"]],
+    ["missing", 1, ["a", "b", "c"]],
+  ] as const)("moves %s by %i", (id, offset, expected) => {
+    expect(idsOf(moveRule(rules, id, offset))).toEqual(expected);
+  });
+
+  it("does not mutate the input", () => {
+    moveRule(rules, "b", -1);
+
+    expect(idsOf(rules)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("shadowedRuleIds", () => {
+  it("returns the rules below an enabled catch-all", () => {
+    expect(
+      shadowedRuleIds([hostnameRule("a"), catchAll, hostnameRule("b")]),
+    ).toEqual(new Set(["b"]));
+  });
+
+  it("ignores a disabled catch-all", () => {
+    expect(
+      shadowedRuleIds([{ ...catchAll, enabled: false }, hostnameRule("b")]),
+    ).toEqual(new Set());
+  });
+
+  it("returns nothing without a catch-all", () => {
+    expect(shadowedRuleIds([hostnameRule("a")])).toEqual(new Set());
+  });
+});
 
 describe("normalizeHostnameInput", () => {
   it.each([

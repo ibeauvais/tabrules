@@ -49,7 +49,6 @@ describe("grouping in Chrome", () => {
   it("groups every hostname matching a regex rule into one group", async () => {
     await harness.setStorage({
       rules: [
-        catchAllRule,
         {
           id: "alpha-family",
           type: "regex",
@@ -58,6 +57,7 @@ describe("grouping in Chrome", () => {
           color: "purple",
           enabled: true,
         },
+        catchAllRule,
       ],
     });
     await harness.openTab(harness.urlFor("alpha.test"));
@@ -82,6 +82,35 @@ describe("grouping in Chrome", () => {
         hostnames: ["beta.test"],
       },
     ]);
+  });
+
+  it("applies the first matching rule in priority order", async () => {
+    const familyRule = {
+      id: "family",
+      type: "regex",
+      pattern: "(^|\\.)alpha\\.test$",
+      groupTitle: "Family",
+      enabled: true,
+    };
+    const oneRule = {
+      id: "one",
+      type: "hostname",
+      pattern: "one.alpha.test",
+      groupTitle: "One",
+      enabled: true,
+    };
+    await harness.setStorage({ rules: [familyRule, oneRule] });
+    await harness.openTab(harness.urlFor("one.alpha.test"));
+    await harness.waitForGroups((current) => current[0]?.title === "Family");
+
+    await harness.setStorage({ rules: [oneRule, familyRule] });
+    const groups = await harness.waitForGroups(
+      (current) => current[0]?.title === "One",
+    );
+
+    expect(
+      groups.map(({ title, hostnames }) => ({ title, hostnames })),
+    ).toEqual([{ title: "One", hostnames: ["one.alpha.test"] }]);
   });
 
   it("creates one group per hostname with the catch-all rule", async () => {

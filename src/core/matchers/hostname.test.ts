@@ -12,7 +12,9 @@ const rule = (overrides: Partial<HostnameRule> = {}): HostnameRule => ({
 
 describe("exactHostnameMatcher", () => {
   const match = (rules: HostnameRule[], url: string) =>
-    exactHostnameMatcher.compile(rules).match(new URL(url));
+    exactHostnameMatcher
+      .compile(rules.map((rule, priority) => ({ rule, priority })))
+      .match(new URL(url))?.target ?? null;
 
   it("returns null when there are no rules", () => {
     expect(match([], "https://github.com/")).toBeNull();
@@ -73,7 +75,9 @@ describe("exactHostnameMatcher", () => {
 
 describe("catchAllMatcher", () => {
   const match = (rules: HostnameRule[], url: string) =>
-    catchAllMatcher.compile(rules).match(new URL(url));
+    catchAllMatcher
+      .compile(rules.map((rule, priority) => ({ rule, priority })))
+      .match(new URL(url))?.target ?? null;
 
   it("returns null without a catch-all rule", () => {
     expect(
@@ -96,5 +100,26 @@ describe("catchAllMatcher", () => {
 
   it("returns null for a URL without hostname", () => {
     expect(match([rule()], "file:///tmp/a.txt")).toBeNull();
+  });
+});
+
+describe("hostname matchers priority", () => {
+  it("returns the priority of the matched rule", () => {
+    const compiled = exactHostnameMatcher.compile([
+      { rule: rule({ id: "gh", pattern: "github.com" }), priority: 7 },
+    ]);
+
+    expect(compiled.match(new URL("https://github.com/"))?.priority).toBe(7);
+  });
+
+  it("keeps the highest-priority rule for a duplicated hostname", () => {
+    const compiled = exactHostnameMatcher.compile([
+      { rule: rule({ id: "first", pattern: "github.com" }), priority: 0 },
+      { rule: rule({ id: "second", pattern: "github.com" }), priority: 1 },
+    ]);
+
+    expect(compiled.match(new URL("https://github.com/"))?.target.key).toBe(
+      "rule:first",
+    );
   });
 });

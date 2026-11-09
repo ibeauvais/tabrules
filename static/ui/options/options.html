@@ -98,6 +98,7 @@
         <table id="rules-table">
           <thead>
             <tr>
+              <th scope="col"><abbr title="Priority">#</abbr></th>
               <th scope="col">On</th>
               <th scope="col">Match</th>
               <th scope="col">Pattern</th>
@@ -109,9 +110,10 @@
           <tbody id="rules-body"></tbody>
         </table>
         <p class="muted hint">
-          An exact rule matches that hostname only: github.com does not match
-          gist.github.com. Exact rules apply first, then regular expressions in
-          list order, then <code>*</code>. Groups you create yourself are never
+          Rules are checked from top to bottom: the first rule that matches
+          decides the group and the next ones are skipped. Use ↑ and ↓ to change
+          the priority. An exact rule matches that hostname only: github.com
+          does not match gist.github.com. Groups you create yourself are never
           changed.
         </p>
       </section>

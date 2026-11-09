@@ -15,11 +15,14 @@ First rule type: **full hostname**.
 ## 1. Scope
 
 - **The `hostname` rule.** `new URL(url).hostname`, lower-cased. `mail.google.com` and `docs.google.com` go into two separate groups. `www.github.com` and `github.com` are also kept separate; normalizing them can come later as a per-rule option.
-- **Pattern `*`.** A catch-all rule that creates one group per hostname, so the user doesn't have to declare every site. Every other rule takes precedence over it. It cannot have a `groupTitle`: each group is titled with its hostname.
+- **Pattern `*`.** A catch-all rule that creates one group per hostname, so the user doesn't have to declare every site. It is ranked like any other rule, and every rule below it is never applied; the options page flags those rules. It cannot have a `groupTitle`: each group is titled with its hostname.
 - **The `regex` rule.** A regular expression tested against the hostname only, with search semantics like `RegExp.test`. For example, `(^|\.)google\.com$` matches google.com and all its subdomains. All matching hostnames go into one group, titled with the rule's `groupTitle` or else the pattern.
   - Supported syntax: `. [ ] [^ ] ( ) (?: ) | * + ? {n,m} ^ $ \d \w` and escaped metacharacters.
   - Rejected with an explicit error: backreferences, lookarounds, other escapes and uppercase letters.
-- **Precedence.** Exact hostname rules first, then regex rules in list order, then `*`.
+- **Priority.** Rules are evaluated in list order and the first matching rule wins; later rules are not considered, as with firewall rules.
+  - The options page reorders rules with ↑ and ↓ buttons.
+  - New rules are inserted just above the first `*` rule, so they are not shadowed from the start.
+  - Matching stays fast. Each matcher returns its best candidate with its priority (an O(1) map for exact rules, the regex rules in order, the catch-all), and the registry keeps the lowest priority.
 - **Hostname normalization.** The port, credentials and a trailing dot are ignored. IDNs stay in punycode (`xn--caf-dma.fr`), which avoids homograph look-alikes in group titles.
 - **Schemes.** Only `http:` and `https:` are handled. `chrome://`, `about:`, `file:`, `data:`, extension pages and pinned tabs are ignored.
 - **Extensibility.** Every rule type implements one interface and is registered in a registry. A new rule type means one new matcher file plus its tests; the engine doesn't change.
@@ -27,7 +30,7 @@ First rule type: **full hostname**.
   interface RuleMatcher<R extends Rule> {
     compile(rules: readonly R[]): CompiledMatcher; // precompute once per rules change
   }
-  // registry.ts runs the compiled matchers in precedence order: exact, regex, catch-all
+  // match() returns { priority, target }; registry.ts keeps the lowest priority across matchers
   interface CompiledMatcher {
     match(url: URL): GroupTarget | null; // null = no match
   }
@@ -84,7 +87,8 @@ manifest.json
 
 **Input validation** (rules come from the options UI or from a JSON import)
 
-- Validate imports against a strict schema. Reject unknown fields.
+- Validate imports and saves against a strict schema. Reject unknown fields.
+- Reading stored rules is lenient. The service worker and the pages apply the valid rules and report the invalid ones, instead of dropping everything. Otherwise a single unknown rule, for example one written by a newer version or read by a stale service worker, would disable all grouping.
 - Hostname patterns: the charset `[a-z0-9.-]`, or `*`.
 - Limits: at most 253 characters per pattern, 100 characters per group title, 500 rules.
 - Colors are checked against the `chrome.tabGroups.Color` enum.
@@ -117,7 +121,7 @@ manifest.json
 - **Serialization and coalescing.** A single promise queue prevents duplicate groups when several tabs open at once. Events arriving while a pass is pending are coalesced into that pass: tab IDs are deduplicated and read in parallel, and a pending full pass absorbs individual tab events. Each pass re-reads the tabs, so it never acts on a stale event snapshot. Without coalescing, restoring 300 tabs queued 300 serial passes and grouping took about 4.9 s.
 - **Parallel groups.** Within a pass, groups are created in parallel. Chrome takes about 100 ms per `tabs.group` call in headless mode, so ten groups take about 1.3 s sequentially and 0.4 s in parallel. Buckets sharing a title in the same window stay sequential, so title adoption never creates duplicate groups.
 - **Budgets** (measured on an Apple Silicon laptop, headless Chrome for Testing).
-  - "Group all" on 300 loaded tabs across 10 hostnames: 370-700 ms measured, of which about 400 ms is Chrome's own API time. The e2e test fails above 2 s. That leaves headroom for shared CI runners while still catching a regression like the 4.9 s seen without coalescing.
+  - "Group all" on 300 loaded tabs across 10 hostnames: 370-700 ms measured, of which about 400 ms is Chrome's own API time. Single runs spike above 1 s on a busy machine, so the e2e test takes the median of 3 runs and fails above 2 s. That leaves headroom for shared CI runners while still catching a regression like the 4.9 s seen without coalescing.
   - Unpacked size under 100 KB; currently 72 KB.
     - That is 49 KB of JavaScript (12 KB gzipped), 12 KB of icons and 10 KB of HTML and CSS.
     - JavaScript ships unminified on purpose, so the published code stays readable for audits.

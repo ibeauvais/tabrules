@@ -1,4 +1,10 @@
-import { ruleFromDraft } from "../../core/rule-editing.js";
+import {
+  insertRule,
+  isCatchAllRule,
+  moveRule,
+  ruleFromDraft,
+  shadowedRuleIds,
+} from "../../core/rule-editing.js";
 import {
   CATCH_ALL_PATTERN,
   isTabGroupColor,
@@ -40,9 +46,6 @@ const MAX_REPORTED_IMPORT_ERRORS = 3;
 
 let rules: Rule[] = [];
 let editingRuleId: string | null = null;
-
-const isCatchAll = (rule: Rule) =>
-  rule.type === "hostname" && rule.pattern === CATCH_ALL_PATTERN;
 
 const selectedMatchType = (): RuleType =>
   matchTypeSelect.value === "regex" ? "regex" : "hostname";
@@ -103,8 +106,34 @@ const startEditing = (rule: Rule): void => {
   patternInput.focus();
 };
 
-const renderRow = (rule: Rule): HTMLTableRowElement => {
-  const label = isCatchAll(rule) ? "every site" : rule.pattern;
+const moveButton = (
+  rule: Rule,
+  label: string,
+  offset: -1 | 1,
+  disabled: boolean,
+): HTMLButtonElement => {
+  const button = createElement("button", {
+    className: "link",
+    text: offset === -1 ? "↑" : "↓",
+    attributes: {
+      type: "button",
+      "aria-label": `Move rule for ${label} ${offset === -1 ? "up" : "down"}`,
+    },
+  });
+  button.disabled = disabled;
+  button.addEventListener("click", () => {
+    runListAction(() => persist(moveRule(rules, rule.id, offset)));
+  });
+  return button;
+};
+
+const renderRow = (
+  rule: Rule,
+  index: number,
+  shadowedIds: ReadonlySet<string>,
+): HTMLTableRowElement => {
+  const label = isCatchAllRule(rule) ? "every site" : rule.pattern;
+  const isShadowed = shadowedIds.has(rule.id);
 
   const enabledToggle = createElement("input", {
     attributes: { type: "checkbox", "aria-label": `Enable rule for ${label}` },
@@ -125,9 +154,17 @@ const renderRow = (rule: Rule): HTMLTableRowElement => {
   const patternCell = createElement("td", {}, [
     createElement("code", { text: rule.pattern }),
   ]);
-  if (isCatchAll(rule)) {
+  if (isCatchAllRule(rule)) {
     patternCell.append(
       createElement("span", { className: "muted", text: " every site" }),
+    );
+  }
+  if (isShadowed) {
+    patternCell.append(
+      createElement("span", {
+        className: "warning",
+        text: `Never applied: the ${CATCH_ALL_PATTERN} rule above matches every site.`,
+      }),
     );
   }
 
@@ -135,7 +172,7 @@ const renderRow = (rule: Rule): HTMLTableRowElement => {
     rule.groupTitle === undefined
       ? createElement("td", {
           className: "muted",
-          text: isCatchAll(rule) ? "Its hostname" : rule.pattern,
+          text: isCatchAllRule(rule) ? "Its hostname" : rule.pattern,
         })
       : createElement("td", { text: rule.groupTitle });
 
@@ -170,13 +207,16 @@ const renderRow = (rule: Rule): HTMLTableRowElement => {
     );
   });
 
-  return createElement("tr", {}, [
+  return createElement("tr", { className: isShadowed ? "shadowed" : "" }, [
+    createElement("td", { className: "priority", text: String(index + 1) }),
     createElement("td", {}, [enabledToggle]),
     createElement("td", { text: rule.type === "regex" ? "Regex" : "Exact" }),
     patternCell,
     titleCell,
     colorCell,
     createElement("td", { className: "row-actions" }, [
+      moveButton(rule, label, -1, index === 0),
+      moveButton(rule, label, 1, index === rules.length - 1),
       editButton,
       deleteButton,
     ]),
@@ -184,7 +224,10 @@ const renderRow = (rule: Rule): HTMLTableRowElement => {
 };
 
 function render(): void {
-  rulesBody.replaceChildren(...rules.map(renderRow));
+  const shadowedIds = shadowedRuleIds(rules);
+  rulesBody.replaceChildren(
+    ...rules.map((rule, index) => renderRow(rule, index, shadowedIds)),
+  );
   rulesTable.hidden = rules.length === 0;
   emptyState.hidden = rules.length > 0;
   exportButton.disabled = rules.length === 0;
@@ -275,7 +318,7 @@ form.addEventListener("submit", (event) => {
   }
   const nextRules = editedRule
     ? rules.map((rule) => (rule.id === editedRule.id ? result.rule : rule))
-    : [...rules, result.rule];
+    : insertRule(rules, result.rule);
   persist(nextRules)
     .then(resetForm)
     .catch((error: unknown) => {
@@ -287,15 +330,14 @@ cancelButton.addEventListener("click", resetForm);
 
 addCatchAllButton.addEventListener("click", () => {
   runListAction(() =>
-    persist([
-      ...rules,
-      {
+    persist(
+      insertRule(rules, {
         id: crypto.randomUUID(),
         type: "hostname",
         pattern: CATCH_ALL_PATTERN,
         enabled: true,
-      },
-    ]),
+      }),
+    ),
   );
 });
 

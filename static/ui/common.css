@@ -8,6 +8,7 @@
   --accent: #1a73e8;
   --accent-text: #ffffff;
   --danger: #c5221f;
+  --warning: #b06000;
   --focus: #1a73e8;
   --radius: 8px;
   font-family: system-ui, sans-serif;
@@ -25,6 +26,7 @@
     --accent: #8ab4f8;
     --accent-text: #202124;
     --danger: #f28b82;
+    --warning: #fdd663;
     --focus: #8ab4f8;
   }
 }

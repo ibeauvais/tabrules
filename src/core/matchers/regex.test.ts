@@ -11,7 +11,9 @@ const rule = (overrides: Partial<RegexRule> = {}): RegexRule => ({
 });
 
 const match = (rules: RegexRule[], url: string) =>
-  regexMatcher.compile(rules).match(new URL(url));
+  regexMatcher
+    .compile(rules.map((rule, priority) => ({ rule, priority })))
+    .match(new URL(url))?.target ?? null;
 
 describe("regexMatcher", () => {
   it("puts every matching hostname in one group keyed by rule id", () => {
@@ -59,5 +61,19 @@ describe("regexMatcher", () => {
     const rules = [rule({ id: "broken", pattern: "(?=a)" }), rule()];
 
     expect(match(rules, "https://google.com/")?.key).toBe("rule:r1");
+  });
+});
+
+describe("regexMatcher priority", () => {
+  it("returns the first match by priority, whatever the input order", () => {
+    const compiled = regexMatcher.compile([
+      { rule: rule({ id: "low" }), priority: 5 },
+      { rule: rule({ id: "high", pattern: "google" }), priority: 2 },
+    ]);
+
+    expect(compiled.match(new URL("https://mail.google.com/"))).toEqual({
+      priority: 2,
+      target: { key: "rule:high", title: "google" },
+    });
   });
 });

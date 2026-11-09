@@ -6,19 +6,34 @@ export interface GroupTarget {
   color?: TabGroupColor;
 }
 
+export interface RankedRule<R extends Rule> {
+  rule: R;
+  priority: number;
+}
+
+export interface Candidate {
+  priority: number;
+  target: GroupTarget;
+}
+
 export interface CompiledMatcher {
-  match(url: URL): GroupTarget | null;
+  match(url: URL): Candidate | null;
 }
 
 export interface RuleMatcher<R extends Rule> {
-  compile(rules: readonly R[]): CompiledMatcher;
+  compile(rankedRules: readonly RankedRule<R>[]): CompiledMatcher;
 }
 
 export const hostnameOf = (url: URL): string => url.hostname.replace(/\.$/, "");
 
-export const groupTarget = (
+export const candidate = (
+  { rule, priority }: RankedRule<Rule>,
   key: string,
   title: string,
-  rule: Rule,
-): GroupTarget =>
-  rule.color === undefined ? { key, title } : { key, title, color: rule.color };
+): Candidate => ({
+  priority,
+  target:
+    rule.color === undefined
+      ? { key, title }
+      : { key, title, color: rule.color },
+});

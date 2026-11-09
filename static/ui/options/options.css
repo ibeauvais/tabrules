@@ -86,3 +86,18 @@ th {
     grid-template-columns: 1fr;
   }
 }
+
+.priority {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.warning {
+  display: block;
+  color: var(--warning);
+  font-size: 12px;
+}
+
+tr.shadowed > td:not(:last-child) {
+  opacity: 0.6;
+}

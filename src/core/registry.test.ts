@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { compileRules } from "./registry.js";
-import type { HostnameRule } from "./rule.js";
+import type { HostnameRule, Rule } from "./rule.js";
 
 const rule = (overrides: Partial<HostnameRule> = {}): HostnameRule => ({
   id: "r1",
@@ -58,23 +58,51 @@ describe("compileRules", () => {
     );
   });
 
-  it("applies exact rules, then regex rules, then the catch-all", () => {
-    const compiled = compileRules([
-      rule({ id: "all" }),
-      {
-        id: "google",
-        type: "regex",
-        pattern: "(^|\\.)google\\.com$",
-        enabled: true,
-      },
-      rule({ id: "mail", pattern: "mail.google.com" }),
-    ]);
+  describe("priority: the first matching rule in list order wins", () => {
+    const googleRegex: Rule = {
+      id: "google",
+      type: "regex",
+      pattern: "(^|\\.)google\\.com$",
+      enabled: true,
+    };
+    const mailExact = rule({ id: "mail", pattern: "mail.google.com" });
 
-    expect(compiled.match("https://mail.google.com/")?.key).toBe("rule:mail");
-    expect(compiled.match("https://docs.google.com/")?.key).toBe("rule:google");
-    expect(compiled.match("https://github.com/")?.key).toBe(
-      "hostname:github.com",
-    );
+    it("lets an exact rule above a regex win", () => {
+      const compiled = compileRules([mailExact, googleRegex, rule()]);
+
+      expect(compiled.match("https://mail.google.com/")?.key).toBe("rule:mail");
+      expect(compiled.match("https://docs.google.com/")?.key).toBe(
+        "rule:google",
+      );
+      expect(compiled.match("https://github.com/")?.key).toBe(
+        "hostname:github.com",
+      );
+    });
+
+    it("lets a regex above an exact rule win", () => {
+      const compiled = compileRules([googleRegex, mailExact]);
+
+      expect(compiled.match("https://mail.google.com/")?.key).toBe(
+        "rule:google",
+      );
+    });
+
+    it("lets a catch-all at the top shadow every other rule", () => {
+      const compiled = compileRules([rule(), mailExact, googleRegex]);
+
+      expect(compiled.match("https://mail.google.com/")?.key).toBe(
+        "hostname:mail.google.com",
+      );
+    });
+
+    it("skips disabled rules when ranking", () => {
+      const compiled = compileRules([
+        { ...googleRegex, enabled: false },
+        mailExact,
+      ]);
+
+      expect(compiled.match("https://mail.google.com/")?.key).toBe("rule:mail");
+    });
   });
 
   it("ignores disabled regex rules", () => {
