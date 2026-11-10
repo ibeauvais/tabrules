@@ -1,5 +1,11 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { launchHarness, waitFor, type Harness } from "./harness.js";
+import {
+  launchHarness,
+  POLL_OPTIONS,
+  waitFor,
+  withoutColor,
+  type Harness,
+} from "./harness.js";
 
 describe("options page and popup", () => {
   let harness: Harness;
@@ -26,12 +32,9 @@ describe("options page and popup", () => {
     await page.select("#color", "green");
     await page.click("#submit");
 
-    const groups = await harness.waitForGroups(
-      (current) => current.length === 1,
-    );
-    expect(groups).toEqual([
-      { title: "Alpha", color: "green", hostnames: ["alpha.test"] },
-    ]);
+    await expect
+      .poll(() => harness.readGroups(), POLL_OPTIONS)
+      .toEqual([{ title: "Alpha", color: "green", hostnames: ["alpha.test"] }]);
     expect(await page.$$eval("#rules-body tr", (rows) => rows.length)).toBe(1);
     await page.close();
   });
@@ -52,14 +55,11 @@ describe("options page and popup", () => {
     await page.type("#group-title", "Alpha");
     await page.click("#submit");
 
-    const groups = await harness.waitForGroups(
-      (current) => current[0]?.hostnames.length === 2,
-    );
-    expect(
-      groups.map(({ title, hostnames }) => ({ title, hostnames })),
-    ).toEqual([
-      { title: "Alpha", hostnames: ["one.alpha.test", "two.alpha.test"] },
-    ]);
+    await expect
+      .poll(async () => withoutColor(await harness.readGroups()), POLL_OPTIONS)
+      .toEqual([
+        { title: "Alpha", hostnames: ["one.alpha.test", "two.alpha.test"] },
+      ]);
     expect(await harness.readStorage("rules")).toEqual([
       {
         id: expect.any(String) as string,

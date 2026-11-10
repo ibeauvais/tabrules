@@ -31,6 +31,11 @@ export interface Harness {
   close(): Promise<void>;
 }
 
+export const POLL_OPTIONS = { timeout: 5_000, interval: 50 };
+
+export const withoutColor = (groups: GroupSnapshot[]) =>
+  groups.map(({ title, hostnames }) => ({ title, hostnames }));
+
 export const waitFor = async <T>(
   read: () => Promise<T>,
   isDone: (value: T) => boolean,
