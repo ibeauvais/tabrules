@@ -101,6 +101,20 @@ Releasing: bump `version` in `package.json`, update `CHANGELOG.md`, commit,
 then push a `v<version>` tag. The release workflow builds, attests and
 publishes the package.
 
+Publishing to the Chrome Web Store: the item uses
+[verified CRX uploads](https://developer.chrome.com/docs/webstore/update#opt-in-to-verified-crx-uploads),
+so the store only accepts packages signed with the publisher's private key.
+That key never leaves the publisher's machine.
+
+```sh
+npm run sign-release -- <version> <path/to/private-key.pem>
+```
+
+The script downloads the GitHub release, checks its checksum, rebuilds it from
+the tag in a temporary worktree, fails unless both zips are identical, then
+signs the rebuilt zip into `release/tabrules-<version>.crx`. Upload that file
+to the store.
+
 ## License
 
 [MIT](LICENSE)
